@@ -10,13 +10,10 @@ SERVER_PORT = 5314
 BOT_COUNT = 2 
 PACKET_INPUT = 1
 
-# Packet Format (Phase 98 Protocol Update)
-# Header (int type, int owner_id) + Body (ClientInput struct)
-# Note: Input packet has no owner_id in struct usually, but let's match the standard header size just in case.
-# Actually, standard input packet is: int type + ClientInput. 
-# The server READS it as type, then data. 
-# ClientInput struct: fwd, strafe, yaw, pitch, jump, crouch, shoot, reload, wpn, zoom
-PACKET_FMT = "i" + "ffffiiiiii" 
+# Packet Format (Phase 95 MTU Fix + Phase 98 Header)
+# Header: int type + int owner_id (Server ignores owner_id from client, but we match size)
+# Body: ClientInput struct (fwd, strafe, yaw, pitch, jump, crouch, shoot, reload, wpn, zoom)
+PACKET_FMT = "ii" + "ffffiiiiii" 
 
 class Bot:
     def __init__(self, id):
@@ -49,10 +46,9 @@ class Bot:
             self.weapon = 3 if self.weapon == 2 else 2
 
         # Data construction
-        # We send a basic input packet. 
-        # Server expects: int type + ClientInput struct
+        # Send Type (1) + OwnerID (0, ignored) + Input Data
         data = struct.pack(PACKET_FMT, 
-                           PACKET_INPUT, 
+                           PACKET_INPUT, 0,
                            self.fwd, self.strafe, self.yaw, self.pitch,
                            self.jump, 0, self.shoot, 0, self.weapon, 0)
         
