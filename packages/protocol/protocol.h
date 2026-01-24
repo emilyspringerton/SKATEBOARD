@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define PORT 5000
+#define PORT 5314  // NEW PORT to bypass zombie process
 #define MAX_CLIENTS 10
 #define MAX_WEAPONS 5
 
@@ -20,13 +20,12 @@ typedef struct {
     int id; int dmg; int rof; int cnt; float spr; int ammo_max; float range;
 } WeaponStats;
 
-// PHASE 90 BALANCE
+// PHASE 90 BALANCE (Kept)
 static WeaponStats WPN_STATS[MAX_WEAPONS] = {
     {WPN_KNIFE,   45, 20, 1,  0.0f,   0,  3.5f},
-    // MAGNUM NERF: 24 Dmg (5 shots to kill). ROF 12 (Fast fire).
     {WPN_MAGNUM,  24, 12, 1,  0.0f,   12, 200.0f}, 
     {WPN_AR,      12, 6,  1,  0.04f,  30, 200.0f},
-    {WPN_SHOTGUN, 10, 50, 12, 0.22f,  8,  70.0f}, // Kept Buff
+    {WPN_SHOTGUN, 10, 50, 12, 0.22f,  8,  70.0f}, 
     {WPN_SNIPER,  95, 70, 1,  0.0f,   5,  500.0f}
 };
 
