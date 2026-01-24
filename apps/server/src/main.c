@@ -26,12 +26,14 @@
 #include "../../../packages/protocol/protocol.h"
 #include "../../../packages/simulation/game_physics.h"
 
-ServerState state;
-GameMap map;
-int game_timer = 0;
+// --- CRITICAL: Include Map Impl ---
+#include "../../../packages/map/map.c"
 
-// TIMEOUT TRACKING
-long long last_seen[MAX_CLIENTS];
+// --- INCLUDE SHARED PHYSICS ENGINE ---
+#include "../../../packages/simulation/local_game.h"
+
+// Define the extern from local_game.h
+ServerState local_state;
 
 long long current_time_ms() {
     struct timespec ts;
@@ -39,32 +41,7 @@ long long current_time_ms() {
     return (long long)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
 
-void reset_game() {
-    printf("RESETTING GAME...\n");
-    game_timer = GAME_DURATION;
-    phys_init_map(&map);
-    memset(&state, 0, sizeof(state));
-    
-    for(int i=0; i<MAX_CLIENTS; i++) {
-        state.players[i].active = 0;
-        state.players[i].health = 100;
-        state.players[i].pos.y = 5.0f;
-        state.players[i].current_weapon = WPN_MAGNUM;
-        for(int j=0; j<MAX_WEAPONS; j++) state.players[i].ammo[j] = WPN_STATS[j].ammo_max;
-        last_seen[i] = 0;
-    }
-    
-    // Server Bot (Always Active)
-    state.players[1].active = 1;
-    state.players[1].pos.z = 10.0f;
-    last_seen[1] = current_time_ms() + 999999999; // Never timeout
-}
-
 int main() {
-    #ifdef _WIN32
-    WSADATA wsa; WSAStartup(MAKEWORD(2,2), &wsa);
-    #endif
-    
     SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (sock == INVALID_SOCKET) { perror("Socket Failed"); return 1; }
 
@@ -78,21 +55,21 @@ int main() {
         perror("Bind Failed"); return 1;
     }
     
-    #ifdef _WIN32
-        u_long mode = 1; ioctlsocket(sock, FIONBIO, &mode);
-    #else
-        int flags = fcntl(sock, F_GETFL, 0);
-        fcntl(sock, F_SETFL, flags | O_NONBLOCK);
-    #endif
+    // Non-Blocking
+    int flags = fcntl(sock, F_GETFL, 0);
+    fcntl(sock, F_SETFL, flags | O_NONBLOCK);
+
+    printf("🔥 HYBRID SERVER LISTENING ON PORT %d\n", PORT);
+    
+    // Init Physics
+    local_init();
 
     struct sockaddr_in clients[MAX_CLIENTS];
     int client_active[MAX_CLIENTS] = {0};
-    
-    printf("SHANK SERVER LISTENING ON PORT %d\n", PORT);
-    reset_game();
+    long long last_seen[MAX_CLIENTS] = {0};
 
     while(1) {
-        char buf[1024]; struct sockaddr_in from; 
+        char buf[4096]; struct sockaddr_in from; 
         socklen_t fromlen = sizeof(from);
         long long now = current_time_ms();
         
@@ -100,92 +77,67 @@ int main() {
         while (recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr*)&from, &fromlen) > 0) {
             Packet *pkt = (Packet*)buf;
             
+            // Identify Client
             int pid = -1;
-            // Match existing client
             for(int i=0; i<MAX_CLIENTS; i++) {
                 if (client_active[i] && clients[i].sin_addr.s_addr == from.sin_addr.s_addr && clients[i].sin_port == from.sin_port) {
                     pid = i; break;
                 }
             }
+            
             // New Client?
             if (pid == -1) {
                 for(int i=0; i<MAX_CLIENTS; i++) {
-                    // Only take slot if inactive
-                    if (!state.players[i].active && i != 1) { 
+                    if (!client_active[i] && !local_state.players[i].active) {
                         client_active[i] = 1; clients[i] = from; pid = i;
-                        state.players[i].active = 1;
-                        state.players[i].health = 100; // Reset HP on join
+                        local_state.players[i].active = 1;
+                        local_state.players[i].health = 100;
+                        local_state.players[i].pos.y = 5.0f;
                         printf("Client Joined: PID %d\n", pid);
                         break;
                     }
                 }
             }
 
+            // Process Input
             if (pid != -1) {
-                last_seen[pid] = now; // Update heartbeat
-                
+                last_seen[pid] = now;
                 if (pkt->type == PACKET_INPUT) {
                     ClientInput *in = (ClientInput*)pkt->data;
-                    PlayerState *p = &state.players[pid];
                     
-                    phys_update_player(&map, p, in->fwd, in->strafe, in->yaw, in->pitch, in->jump, in->crouch);
+                    // UPDATE: We must set the global 'local_pid' so the physics engine knows who 'p' is
+                    // But local_update() logic is designed for single-player authoritative.
+                    // We need to tweak it slightly for server-side multi-client.
+                    // Ideally, we'd refactor local_update to take a PID.
+                    // For this phase, we will manually apply input to the specific player struct
+                    // leveraging the helper functions in local_game.h
                     
-                    if (in->reload) { 
-                        if (p->reload_timer <= 0 && p->ammo[p->current_weapon] < WPN_STATS[p->current_weapon].ammo_max) 
-                            p->reload_timer = RELOAD_TIME;
-                    }
-                    if (in->shoot) {
-                        if (p->attack_cooldown <= 0 && p->reload_timer <= 0 && p->ammo[p->current_weapon] > 0) {
-                            p->ammo[p->current_weapon]--;
-                            p->attack_cooldown = WPN_STATS[p->current_weapon].rof;
-                            p->is_shooting = 5;
-                            
-                            Vec3 origin = { p->pos.x, p->pos.y + 1.5f, p->pos.z };
-                            Vec3 dir = phys_get_aim(p->yaw, p->pitch, 0);
-                            for(int i=0; i<MAX_CLIENTS; i++) {
-                                if (i == pid || !state.players[i].active) continue;
-                                if (phys_ray_hit(origin, dir, state.players[i].pos, 1.5f)) {
-                                    p->hit_feedback = 2; 
-                                    state.players[i].health -= WPN_STATS[p->current_weapon].dmg;
-                                    if (state.players[i].health <= 0) {
-                                        p->kills++;
-                                        state.players[i].health = 100;
-                                        state.players[i].pos.x = (rand()%20)-10;
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    local_pid = pid; // Hacky global set
+                    local_update(0.016f, in->fwd, in->strafe, in->yaw, in->pitch, in->shoot, -1, in->jump, in->crouch, in->reload);
                 }
             }
         }
 
-        // 2. TIMEOUT CHECK (Zombie Killer)
-        for (int i=0; i<MAX_CLIENTS; i++) {
-            if (i != 1 && state.players[i].active) { // Don't kick bot
-                if (now - last_seen[i] > 5000) { // 5 Seconds
-                    printf("Client PID %d Timed Out (ZOMBIE KILL)\n", i);
-                    state.players[i].active = 0;
-                    client_active[i] = 0;
-                }
+        // 2. TIMEOUTS & BOTS
+        for(int i=0; i<MAX_CLIENTS; i++) {
+            if (client_active[i] && (now - last_seen[i] > 5000)) {
+                printf("Client %d Timed Out\n", i);
+                client_active[i] = 0;
+                local_state.players[i].active = 0;
             }
         }
-
-        // 3. GAME LOOP
-        state.server_tick++;
-        game_timer--;
-        if (game_timer <= 0) reset_game();
-
-        if (state.players[1].active) {
-            state.players[1].yaw += 2.0f;
-            phys_update_player(&map, &state.players[1], 0, 0, state.players[1].yaw, 0, 0, 0);
+        
+        // Run Bot AI (Slot 1 is usually the dummy)
+        if (local_state.players[1].active && !client_active[1]) {
+             // Simple bot tick
+             local_state.players[1].yaw += 1.0f;
         }
 
-        // 4. BROADCAST
+        // 3. BROADCAST
         for(int i=0; i<MAX_CLIENTS; i++) {
             if (client_active[i]) {
                 Packet out; out.type = PACKET_STATE;
-                memcpy(out.data, &state, sizeof(state));
+                memcpy(out.data, &local_state, sizeof(local_state));
                 sendto(sock, (char*)&out, sizeof(out), 0, (struct sockaddr*)&clients[i], sizeof(clients[i]));
             }
         }
