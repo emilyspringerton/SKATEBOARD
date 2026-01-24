@@ -1,0 +1,4 @@
+# Skateboard
+
+## Todo
+- [ ] Initialize project

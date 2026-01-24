@@ -1,11 +1,13 @@
--- Source [4]
+-- skateboard-cli/schema.sql
+
 CREATE TABLE IF NOT EXISTS chunks (
     id VARCHAR(64) PRIMARY KEY,
     type ENUM('VISION', 'SETUP', 'ARCHITECTURE', 'FEATURE', 'INCOMPLETE', 'DEAD_TEXT') NOT NULL,
     title VARCHAR(255) NOT NULL,
     source_text TEXT,
     status ENUM('unprocessed', 'planned', 'in_progress', 'done', 'blocked') DEFAULT 'unprocessed',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS actions (
