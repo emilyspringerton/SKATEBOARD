@@ -7,9 +7,7 @@
 #include "../protocol/protocol.h"
 #include "../map/map.h"
 
-// We use the SAME state struct as the network client!
 extern ServerState local_state; 
-
 GameMap local_level;
 int local_pid = 0;
 
@@ -45,9 +43,6 @@ int loc_ray_hit(Vec3 origin, Vec3 dir, Vec3 target, float radius) {
 
 void local_init() {
     map_init(&local_level);
-    
-    // Manually add walls to avoid macro confusion
-    // (x, y, z, w, h, d, r, g, b)
     local_level.walls[local_level.wall_count++] = (Wall){5, 0.25f, 5, 1.0f, 0.25f, 1.0f, 1.0f, 0.5f, 0.0f};
     local_level.walls[local_level.wall_count++] = (Wall){6, 0.75f, 5, 1.0f, 0.75f, 1.0f, 1.0f, 0.6f, 0.0f};
 
@@ -59,20 +54,19 @@ void local_init() {
     local_state.players[0].pos.y = 5.0f; 
     local_state.players[0].current_weapon = WPN_MAGNUM;
     
-    WPN_STATS[WPN_MAGNUM].ammo_max = 6; WPN_STATS[WPN_MAGNUM].rof = 20; 
-    WPN_STATS[WPN_AR].ammo_max = 30; WPN_STATS[WPN_AR].rof = 5;
+    // GIVE AMMO FOR EVERYTHING
     for(int j=0; j<MAX_WEAPONS; j++) local_state.players[0].ammo[j] = WPN_STATS[j].ammo_max;
 
     // Player 1 (The Dummy)
     local_state.players[1].active = 1; 
     local_state.players[1].health = 100;
     local_state.players[1].pos.z = 15.0f; 
-    local_state.players[1].pos.y = 0.0f;
     local_state.players[1].color = 0xFF0000;
 }
 
 void local_reload() {
     PlayerState *p = &local_state.players[local_pid];
+    if (p->current_weapon == WPN_KNIFE) return;
     if (p->reload_timer <= 0 && p->ammo[p->current_weapon] < WPN_STATS[p->current_weapon].ammo_max) {
         p->reload_timer = RELOAD_TIME;
     }
@@ -82,6 +76,8 @@ void local_shoot() {
     PlayerState *p = &local_state.players[local_pid];
     int w = p->current_weapon;
     if (p->attack_cooldown > 0 || p->reload_timer > 0) return;
+    
+    // Knife needs no ammo
     if (w != WPN_KNIFE && p->ammo[w] <= 0) return;
 
     if(w != WPN_KNIFE) p->ammo[w]--;
@@ -89,7 +85,7 @@ void local_shoot() {
     p->is_shooting = 5;
 
     int pellets = WPN_STATS[w].cnt;
-    float range = (w == WPN_KNIFE) ? 2.5f : 200.0f;
+    float range = (w == WPN_KNIFE) ? 3.0f : 200.0f;
     Vec3 origin = { p->pos.x, p->pos.y + 1.5f, p->pos.z };
     
     for (int k=0; k<pellets; k++) {
@@ -157,7 +153,9 @@ void local_update(float dt, float fwd, float strafe, float yaw, float pitch, int
     local_state.server_tick++;
     PlayerState *p = &local_state.players[local_pid];
     p->yaw = yaw; p->pitch = pitch;
-    if (weapon != -1) p->current_weapon = weapon;
+    
+    // Weapon Switch Logic
+    if (weapon >= 0 && weapon < MAX_WEAPONS) p->current_weapon = weapon;
 
     apply_friction(p, dt);
     float r = -yaw * (M_PI/180.0f);
@@ -194,7 +192,7 @@ void local_update(float dt, float fwd, float strafe, float yaw, float pitch, int
     if (p->attack_cooldown > 0) p->attack_cooldown--;
     if (p->is_shooting > 0) p->is_shooting--;
 
-    // Update Dummies
+    // Update Bots
     for(int i=1; i<MAX_CLIENTS; i++) {
         if(!local_state.players[i].active) continue;
         PlayerState *curr = &local_state.players[i];

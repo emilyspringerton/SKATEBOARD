@@ -1,4 +1,5 @@
 
+#define SDL_MAIN_HANDLED
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,14 +26,9 @@
 
 #include "../../../packages/protocol/protocol.h"
 #include "../../../packages/simulation/game_physics.h"
-
-// --- CRITICAL: Include Map Impl ---
 #include "../../../packages/map/map.c"
-
-// --- INCLUDE SHARED PHYSICS ENGINE ---
 #include "../../../packages/simulation/local_game.h"
 
-// Define the extern from local_game.h
 ServerState local_state;
 
 long long current_time_ms() {
@@ -55,13 +51,10 @@ int main() {
         perror("Bind Failed"); return 1;
     }
     
-    // Non-Blocking
     int flags = fcntl(sock, F_GETFL, 0);
     fcntl(sock, F_SETFL, flags | O_NONBLOCK);
 
-    printf("🔥 HYBRID SERVER LISTENING ON PORT %d\n", PORT);
-    
-    // Init Physics
+    printf("🔥 ARSENAL SERVER LISTENING ON PORT %d\n", PORT);
     local_init();
 
     struct sockaddr_in clients[MAX_CLIENTS];
@@ -73,19 +66,14 @@ int main() {
         socklen_t fromlen = sizeof(from);
         long long now = current_time_ms();
         
-        // 1. RECEIVE
         while (recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr*)&from, &fromlen) > 0) {
             Packet *pkt = (Packet*)buf;
-            
-            // Identify Client
             int pid = -1;
             for(int i=0; i<MAX_CLIENTS; i++) {
                 if (client_active[i] && clients[i].sin_addr.s_addr == from.sin_addr.s_addr && clients[i].sin_port == from.sin_port) {
                     pid = i; break;
                 }
             }
-            
-            // New Client?
             if (pid == -1) {
                 for(int i=0; i<MAX_CLIENTS; i++) {
                     if (!client_active[i] && !local_state.players[i].active) {
@@ -93,32 +81,24 @@ int main() {
                         local_state.players[i].active = 1;
                         local_state.players[i].health = 100;
                         local_state.players[i].pos.y = 5.0f;
+                        // Give full ammo on join
+                        for(int j=0; j<MAX_WEAPONS; j++) local_state.players[i].ammo[j] = WPN_STATS[j].ammo_max;
                         printf("Client Joined: PID %d\n", pid);
                         break;
                     }
                 }
             }
-
-            // Process Input
             if (pid != -1) {
                 last_seen[pid] = now;
                 if (pkt->type == PACKET_INPUT) {
                     ClientInput *in = (ClientInput*)pkt->data;
-                    
-                    // UPDATE: We must set the global 'local_pid' so the physics engine knows who 'p' is
-                    // But local_update() logic is designed for single-player authoritative.
-                    // We need to tweak it slightly for server-side multi-client.
-                    // Ideally, we'd refactor local_update to take a PID.
-                    // For this phase, we will manually apply input to the specific player struct
-                    // leveraging the helper functions in local_game.h
-                    
-                    local_pid = pid; // Hacky global set
-                    local_update(0.016f, in->fwd, in->strafe, in->yaw, in->pitch, in->shoot, -1, in->jump, in->crouch, in->reload);
+                    local_pid = pid;
+                    // Pass the requested weapon!
+                    local_update(0.016f, in->fwd, in->strafe, in->yaw, in->pitch, in->shoot, in->weapon_req, in->jump, in->crouch, in->reload);
                 }
             }
         }
 
-        // 2. TIMEOUTS & BOTS
         for(int i=0; i<MAX_CLIENTS; i++) {
             if (client_active[i] && (now - last_seen[i] > 5000)) {
                 printf("Client %d Timed Out\n", i);
@@ -127,13 +107,10 @@ int main() {
             }
         }
         
-        // Run Bot AI (Slot 1 is usually the dummy)
         if (local_state.players[1].active && !client_active[1]) {
-             // Simple bot tick
              local_state.players[1].yaw += 1.0f;
         }
 
-        // 3. BROADCAST
         for(int i=0; i<MAX_CLIENTS; i++) {
             if (client_active[i]) {
                 Packet out; out.type = PACKET_STATE;
@@ -141,7 +118,6 @@ int main() {
                 sendto(sock, (char*)&out, sizeof(out), 0, (struct sockaddr*)&clients[i], sizeof(clients[i]));
             }
         }
-
         SLEEP(16);
     }
     return 0;
