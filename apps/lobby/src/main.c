@@ -25,6 +25,7 @@ SOCKET sock;
 struct sockaddr_in server_addr;
 long long last_packet_time = 0;
 ServerState local_state; 
+int my_player_id = 0; // The ID we use to render
 
 float cam_yaw = 0; float cam_pitch = 0;
 char chat_buf[64] = {0};
@@ -44,18 +45,15 @@ void net_init() {
 void net_send_input(float fwd, float strafe, int jump, int crouch, int shoot, int reload, int weapon, int zoom) {
     Packet pkt; 
     pkt.type = PACKET_INPUT;
+    pkt.owner_id = my_player_id;
     
-    // Copy data into packet buffer
     ClientInput in;
     in.fwd = fwd; in.strafe = strafe; in.yaw = cam_yaw; in.pitch = cam_pitch;
     in.jump = jump; in.crouch = crouch; in.shoot = shoot; in.reload = reload;
     in.weapon_req = weapon; in.zoom = zoom;
-    
     memcpy(pkt.data, &in, sizeof(ClientInput));
     
-    // CRITICAL FIX: Only send necessary bytes (Header + Data)
-    int packet_size = sizeof(int) + sizeof(ClientInput);
-    sendto(sock, (char*)&pkt, packet_size, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+    sendto(sock, (char*)&pkt, sizeof(int)*2 + sizeof(ClientInput), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
 }
 
 void net_update() {
@@ -64,16 +62,15 @@ void net_update() {
     while((len = recv(sock, buf, sizeof(buf), 0)) > 0) {
         Packet *pkt = (Packet*)buf;
         if (pkt->type == PACKET_STATE) {
-            // Verify size to prevent crash
-            if (len >= sizeof(int) + sizeof(ServerState)) {
+            if (len >= sizeof(int)*2 + sizeof(ServerState)) {
                 memcpy(&local_state, pkt->data, sizeof(ServerState));
+                my_player_id = pkt->owner_id; // GET ID
                 last_packet_time = current_ms();
             }
         }
     }
 }
 
-// --- VISUALS ---
 void draw_cube(float sx, float sy, float sz) {
     glPushMatrix(); glScalef(sx, sy, sz);
     glBegin(GL_QUADS);
@@ -121,7 +118,10 @@ void render_gun(PlayerState *me) {
 
 void render_game() {
     glClearColor(0.1f, 0.1f, 0.15f, 1.0f); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    PlayerState *me = &local_state.players[0]; 
+    
+    // ATTACH CAMERA TO CORRECT ID
+    PlayerState *me = &local_state.players[my_player_id];
+    
     float fov = (me->current_weapon == WPN_SNIPER && zoom_held) ? 20.0f : 70.0f;
     glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluPerspective(fov, 1280.0f/720.0f, 0.1f, 1000.0f);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
@@ -145,8 +145,12 @@ void render_game() {
         }
     }
 
-    for(int i=1; i<MAX_CLIENTS; i++) {
-        if (!local_state.players[i].active || i == 0) continue; 
+    for(int i=0; i<MAX_CLIENTS; i++) {
+        if (!local_state.players[i].active) continue;
+        
+        // DO NOT RENDER MY OWN BODY
+        if (i == my_player_id) continue;
+        
         draw_bot(local_state.players[i].pos, -local_state.players[i].yaw, local_state.server_tick);
         if (me->hit_feedback == 2 && i==1) spawn_particle(local_state.players[i].pos, 5, 0, 0);
     }
@@ -160,6 +164,10 @@ void render_game() {
     if (app_state == STATE_GAME_NET) {
         long long timeout = current_ms() - last_packet_time;
         if (timeout > 3000) draw_text("CONNECTION LOST", 480, 360, 30.0f, 1, 0, 0);
+        
+        // Debug ID
+        char id_buf[32]; sprintf(id_buf, "PLAYER ID: %d", my_player_id);
+        draw_text(id_buf, 50, 100, 20.0f, 0, 1, 0);
     } else {
         draw_text("LOCAL DEMO", 1000, 50, 20.0f, 0, 1, 1);
     }
@@ -175,7 +183,7 @@ void render_game() {
 
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window *win = SDL_CreateWindow("SHANK PIT ONLINE v33", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
+    SDL_Window *win = SDL_CreateWindow("SHANK PIT ONLINE v34", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
     SDL_GLContext gl = SDL_GL_CreateContext(win);
     glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluOrtho2D(0, 1280, 720, 0);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();

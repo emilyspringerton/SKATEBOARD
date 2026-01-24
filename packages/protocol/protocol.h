@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-#define PORT 5314  // NEW PORT to bypass zombie process
+#define PORT 5314 
 #define MAX_CLIENTS 10
 #define MAX_WEAPONS 5
 
@@ -20,7 +20,6 @@ typedef struct {
     int id; int dmg; int rof; int cnt; float spr; int ammo_max; float range;
 } WeaponStats;
 
-// PHASE 90 BALANCE (Kept)
 static WeaponStats WPN_STATS[MAX_WEAPONS] = {
     {WPN_KNIFE,   45, 20, 1,  0.0f,   0,  3.5f},
     {WPN_MAGNUM,  24, 12, 1,  0.0f,   12, 200.0f}, 
@@ -49,6 +48,7 @@ typedef struct {
 
 typedef struct {
     int type;
+    int owner_id; // <-- ID of the sender/recipient
     char data[4096];
 } Packet;
 
