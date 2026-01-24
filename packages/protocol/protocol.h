@@ -16,9 +16,8 @@
 #define CMD_CREATE 2
 #define CMD_JOIN   3
 #define CMD_NAME   5
-#define CMD_ENTER_VEHICLE 6 // New Command
+#define CMD_ENTER_VEHICLE 6
 
-// WEAPONS
 #define WPN_KNIFE 0
 #define WPN_MAGNUM 1
 #define WPN_AR 2
@@ -29,10 +28,9 @@ typedef struct { float x, y, z; } Vec3;
 
 typedef struct {
     int active;
-    Vec3 pos; 
-    Vec3 vel;
-    float yaw, pitch, roll; // 3D Rotation
-    int driver_id; // -1 if empty
+    Vec3 pos; Vec3 vel;
+    float yaw, pitch, roll;
+    int driver_id;
 } VehicleState;
 
 typedef struct {
@@ -44,7 +42,8 @@ typedef struct {
     int current_weapon; int ammo[MAX_WEAPONS];
     int attack_cooldown; int is_shooting;
     int hit_feedback; int color; int reload_timer;
-    int in_vehicle; // 1 if driving
+    int in_vehicle;
+    float ground_friction; // <-- NEW: Current traction
 } PlayerState;
 
 typedef struct {
@@ -52,25 +51,19 @@ typedef struct {
     int player_count;
     char status_msg[64];
     PlayerState players[MAX_CLIENTS];
-    VehicleState vehicle; // Single shared vehicle for now
+    VehicleState vehicle;
 } ServerState;
 
 typedef struct {
-    int type;
-    int owner_id; 
-    int cmd_id; 
-    char data[4096];
+    int type; int owner_id; int cmd_id; char data[4096];
 } Packet;
 
 typedef struct {
     float fwd; float strafe; float yaw; float pitch;
     int jump; int crouch; int shoot; int reload;
-    int weapon_req; 
-    int zoom;
-    int use; // 'E' key
+    int weapon_req; int zoom; int use;
 } ClientInput;
 
-// Weapon Stats
 typedef struct { int id; int dmg; int rof; int cnt; float spr; int ammo_max; float range; } WeaponStats;
 static WeaponStats WPN_STATS[MAX_WEAPONS] = {
     {0, 45, 20, 1, 0.0f, 0, 3.5f}, {1, 24, 12, 1, 0.0f, 12, 200.0f}, 

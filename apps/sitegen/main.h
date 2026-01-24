@@ -1,7 +1,11 @@
 #ifndef SITEGEN_H
 #define SITEGEN_H
 
-// Configuration for the Landing Page
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Config Data
 typedef struct {
     char title[128];
     char tagline[256];
@@ -13,12 +17,9 @@ typedef struct {
     char text_color[32];
 } SiteConfig;
 
-// Core Functions
+// Functions
 int load_config(const char* filename, SiteConfig* config);
-int generate_html(const SiteConfig* config);
-int generate_css(const SiteConfig* config);
-
-// Helper for manual JSON parsing
-void parse_json_value(const char* json, const char* key, char* dest, int max_len);
+int generate_site(const SiteConfig* config);
+void serve_site(int port, const char* web_root);
 
 #endif

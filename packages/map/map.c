@@ -4,123 +4,103 @@
 void map_init(GameMap *map) {
     map->wall_count = 0;
     
-    // 1. The Neon Grid Floor (Huge)
-    // ID 1 = Floor
-    map->walls[map->wall_count++] = (Wall){1, 0, -1.0f, 0, 200.0f, 2.0f, 200.0f, 0.0f, 0.1f, 0.2f, 0.95f};
+    // 1. THE FLOOR (Red Desert Sand)
+    // ID 1 = Base Floor (Medium Grip)
+    map->walls[map->wall_count++] = (Wall){1, 0, -1.0f, 0, 300.0f, 2.0f, 300.0f, 0.6f, 0.3f, 0.1f, 0.85f}; 
 
-    // 2. Parkour Cubes (Random heights to jump on)
-    srand(42); 
-    for(int i=0; i<30; i++) {
-        float x = (rand() % 60) - 30.0f;
-        float z = (rand() % 60) - 30.0f;
-        // Make them accessible steps
-        float h = 1.0f + (rand() % 3); 
+    srand(2077); // Seed for Canyon
+
+    // 2. THE MESAS (Towering Red Rocks)
+    // ID 2 = High Grip Rock (Climbable)
+    for (int i=0; i<50; i++) {
+        float angle = (i / 50.0f) * 6.28f;
+        float dist = 50.0f + (rand()%20); 
+        float x = sinf(angle) * dist;
+        float z = cosf(angle) * dist;
+        float h = 15.0f + (rand()%15); 
+        float w = 10.0f + (rand()%10);
         
         map->walls[map->wall_count++] = (Wall){
-            10 + i, 
+            2, 
+            x, h/2.0f - 2.0f, z, 
+            w, h, w, 
+            0.5f, 0.2f, 0.1f, 0.80f // GRIPPY (0.80 friction)
+        };
+    }
+
+    // 3. THE BOULDERS (Slippery Scree)
+    // ID 3 = Slippery Rock (Ice Physics)
+    for(int i=0; i<40; i++) {
+        float angle = (i / 40.0f) * 6.28f;
+        float dist = 40.0f - (rand()%10);
+        float x = sinf(angle) * dist;
+        float z = cosf(angle) * dist;
+        float h = 2.0f + (rand() % 4);
+        
+        map->walls[map->wall_count++] = (Wall){
+            3, 
             x, h/2.0f, z, 
-            2.0f, h, 2.0f, 
-            0.8f, 0.8f, 0.8f, 0.98f // High friction/slip
+            3.0f, h, 3.0f, 
+            0.4f, 0.4f, 0.4f, 0.98f // SLIPPERY (0.98 friction)
         };
     }
     
-    // 3. The "Shank" Platform (Center)
-    map->walls[map->wall_count++] = (Wall){99, 0.0f, 0.5f, 0.0f, 4.0f, 1.0f, 4.0f, 1.0f, 0.8f, 0.0f, 0.96f};
+    // 4. Central Outpost
+    map->walls[map->wall_count++] = (Wall){2, 0, 1.0f, 0, 10.0f, 2.0f, 10.0f, 0.4f, 0.3f, 0.2f, 0.85f};
+    map->walls[map->wall_count++] = (Wall){2, 0, 3.0f, 0, 6.0f, 2.0f, 6.0f, 0.4f, 0.3f, 0.2f, 0.85f};
 }
 
 int map_ray_cast(GameMap *map, Vec3 origin, Vec3 dir, float max_dist) {
-    // Simple Ray-AABB intersection for shooting
     for(int i=0; i<map->wall_count; i++) {
         Wall *w = &map->walls[i];
         float min_x = w->x - w->sx/2; float max_x = w->x + w->sx/2;
         float min_y = w->y - w->sy/2; float max_y = w->y + w->sy/2;
         float min_z = w->z - w->sz/2; float max_z = w->z + w->sz/2;
 
-        float tmin = (min_x - origin.x) / dir.x; 
-        float tmax = (max_x - origin.x) / dir.x; 
-        if (tmin > tmax) { float t=tmin; tmin=tmax; tmax=t; }
-        
-        float tymin = (min_y - origin.y) / dir.y; 
-        float tymax = (max_y - origin.y) / dir.y; 
-        if (tymin > tymax) { float t=tymin; tymin=tymax; tymax=t; }
-        
-        if ((tmin > tymax) || (tymin > tmax)) continue;
-        if (tymin > tmin) tmin = tymin;
-        if (tymax < tmax) tmax = tymax;
-        
-        float tzmin = (min_z - origin.z) / dir.z; 
-        float tzmax = (max_z - origin.z) / dir.z; 
-        if (tzmin > tzmax) { float t=tzmin; tzmin=tzmax; tzmax=t; }
-        
-        if ((tmin > tzmax) || (tzmin > tmax)) continue;
-        if (tzmin > tmin) tmin = tzmin;
-        if (tzmax < tmax) tmax = tzmax;
-        
-        if (tmin > 0 && tmin < max_dist) return 1; // Hit
+        float t1 = (min_x - origin.x)/dir.x; float t2 = (max_x - origin.x)/dir.x;
+        float t3 = (min_y - origin.y)/dir.y; float t4 = (max_y - origin.y)/dir.y;
+        float t5 = (min_z - origin.z)/dir.z; float t6 = (max_z - origin.z)/dir.z;
+
+        float tmin = fmax(fmax(fmin(t1, t2), fmin(t3, t4)), fmin(t5, t6));
+        float tmax = fmin(fmin(fmax(t1, t2), fmax(t3, t4)), fmax(t5, t6));
+
+        if (tmax < 0 || tmin > tmax) continue;
+        if (tmin < max_dist) return 1;
     }
     return 0;
 }
 
-// THE FIX: Platforming Physics
-void map_resolve_collision(GameMap *map, Vec3 *pos, Vec3 *vel) {
+float map_resolve_collision(GameMap *map, Vec3 *pos, Vec3 *vel) {
     float player_w = 0.6f;
     float player_h = 1.8f; 
-    int on_ground = 0;
+    float detected_friction = -1.0f; 
 
     for(int i=0; i<map->wall_count; i++) {
         Wall *w = &map->walls[i];
-        
         float half_sx = w->sx/2 + player_w/2;
-        float half_sy = w->sy/2 + player_h/2; // Height check is tricky, simplified
+        float half_sy = w->sy/2 + player_h/2;
         float half_sz = w->sz/2 + player_w/2;
         
         float dx = pos->x - w->x;
-        float dy = (pos->y + player_h/2) - w->y; // Center of player
+        float dy = (pos->y + player_h/2) - w->y; 
         float dz = pos->z - w->z;
         
-        float abs_dx = fabs(dx);
-        float abs_dy = fabs(dy);
-        float abs_dz = fabs(dz);
-        
-        if (abs_dx < half_sx && abs_dz < half_sz) {
-            // Potential collision. Check vertical bounds carefully.
-            // Player Bottom: pos->y
-            // Wall Top: w->y + w->sy/2
-            
+        if (fabs(dx) < half_sx && fabs(dz) < half_sz && fabs(dy) < half_sy) {
             float wall_top = w->y + w->sy/2;
-            float wall_bot = w->y - w->sy/2;
             
-            // LANDING LOGIC
-            // If we are falling, and our feet were previously above the wall...
-            // Or just simplistic: if feet are near top and velocity is down
-            if (vel->y <= 0 && pos->y >= (wall_top - 0.1f) && pos->y < (wall_top + 0.5f)) {
+            if (vel->y <= 0 && pos->y >= (wall_top - 0.2f)) {
                 pos->y = wall_top;
                 vel->y = 0;
-                on_ground = 1;
-            }
-            // CEILING HIT
-            else if (vel->y > 0 && (pos->y + player_h) > wall_bot && pos->y < wall_bot) {
-                pos->y = wall_bot - player_h;
-                vel->y = 0;
-            }
-            // SIDE HIT (Push out closest axis)
-            else if (pos->y < wall_top - 0.1f) {
-                float pen_x = half_sx - abs_dx;
-                float pen_z = half_sz - abs_dz;
-                
-                if (pen_x < pen_z) {
-                    if (dx > 0) pos->x = w->x + half_sx;
-                    else pos->x = w->x - half_sx;
-                    vel->x = 0;
-                } else {
-                    if (dz > 0) pos->z = w->z + half_sz;
-                    else pos->z = w->z - half_sz;
-                    vel->z = 0;
-                }
+                detected_friction = w->friction; 
+            } else {
+                float pen_x = half_sx - fabs(dx);
+                float pen_z = half_sz - fabs(dz);
+                if (pen_x < pen_z) pos->x = (dx > 0) ? w->x + half_sx : w->x - half_sx;
+                else pos->z = (dz > 0) ? w->z + half_sz : w->z - half_sz;
             }
         }
     }
     
-    // Floor Safety
     if (pos->y < -20.0f) { pos->y = 10.0f; pos->x = 0; pos->z = 0; vel->y = 0; }
+    return detected_friction;
 }
