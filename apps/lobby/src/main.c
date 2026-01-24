@@ -28,7 +28,7 @@ ServerState local_state;
 
 float cam_yaw = 0; float cam_pitch = 0;
 char chat_buf[64] = {0};
-int zoom_held = 0; // Track zoom state
+int zoom_held = 0; 
 
 long long current_ms() { return (long long)SDL_GetTicks(); }
 
@@ -88,14 +88,11 @@ void draw_bot(Vec3 pos, float yaw, int tick) {
 
 void render_gun(PlayerState *me) {
     glLoadIdentity(); glClear(GL_DEPTH_BUFFER_BIT);
-    
-    // Hide gun model when zoomed with sniper
     if (me->current_weapon == WPN_SNIPER && zoom_held) return;
-
     float bob = sinf(local_state.server_tick * 0.2f) * 0.02f * (sqrtf(me->vel.x*me->vel.x + me->vel.z*me->vel.z) * 5.0f);
     float recoil = (me->is_shooting > 0) ? 0.15f : 0.0f;
     glTranslatef(0.3f, -0.3f + bob, -0.5f + recoil); glRotatef(180.0f, 0, 1, 0);
-
+    
     if (me->current_weapon == WPN_KNIFE) { glColor3f(0.6f, 0.6f, 0.6f); glScalef(0.3f, 0.3f, 1.0f); }
     else if (me->current_weapon == WPN_MAGNUM) { glColor3f(0.7f, 0.7f, 0.7f); glScalef(0.5f, 0.5f, 1.0f); }
     else if (me->current_weapon == WPN_AR) { glColor3f(0.1f, 0.1f, 0.1f); glScalef(0.4f, 0.4f, 2.0f); }
@@ -112,16 +109,10 @@ void render_gun(PlayerState *me) {
 
 void render_game() {
     glClearColor(0.1f, 0.1f, 0.15f, 1.0f); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    // ZOOM LOGIC
     PlayerState *me = &local_state.players[0]; 
-    float fov = 70.0f;
-    if (me->current_weapon == WPN_SNIPER && zoom_held) fov = 20.0f;
-
-    glMatrixMode(GL_PROJECTION); glLoadIdentity();
-    gluPerspective(fov, 1280.0f/720.0f, 0.1f, 1000.0f);
+    float fov = (me->current_weapon == WPN_SNIPER && zoom_held) ? 20.0f : 70.0f;
+    glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluPerspective(fov, 1280.0f/720.0f, 0.1f, 1000.0f);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
-
     glRotatef(-cam_pitch, 1.0f, 0.0f, 0.0f); glRotatef(-cam_yaw, 0.0f, 1.0f, 0.0f);
     glTranslatef(-me->pos.x, -(me->pos.y + 1.7f), -me->pos.z);
     
@@ -151,44 +142,31 @@ void render_game() {
     
     glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); gluOrtho2D(0, 1280, 720, 0);
     glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity(); glDisable(GL_DEPTH_TEST);
-    
     char buf[128]; sprintf(buf, "HP %d  AMMO %d", me->health, me->ammo[me->current_weapon]); 
     draw_text(buf, 50, 650, 40.0f, 1, 1, 1);
     
-    const char* wpn_name = "UNKNOWN";
-    if (me->current_weapon == WPN_KNIFE) wpn_name = "KNIFE";
-    if (me->current_weapon == WPN_MAGNUM) wpn_name = "MAGNUM";
-    if (me->current_weapon == WPN_AR) wpn_name = "AR RIFLE";
-    if (me->current_weapon == WPN_SHOTGUN) wpn_name = "SHOTGUN";
-    if (me->current_weapon == WPN_SNIPER) wpn_name = "SNIPER";
-    draw_text(wpn_name, 50, 600, 30.0f, 1, 1, 0);
-
-    // Sniper Scope Overlay
-    if (me->current_weapon == WPN_SNIPER && zoom_held) {
-        glColor3f(0, 0, 0);
-        glLineWidth(2.0f);
-        glBegin(GL_LINES);
-        glVertex2f(0, 360); glVertex2f(1280, 360);
-        glVertex2f(640, 0); glVertex2f(640, 720);
-        glEnd();
-        // Circle approximation (optional, for now just crosshairs)
-    } else {
-        glBegin(GL_LINES); glColor3f(0,1,1); glVertex2f(640-10, 360); glVertex2f(640+10, 360); glVertex2f(640, 360-10); glVertex2f(640, 360+10); glEnd();
-    }
-
+    // UI: Connection Status
     if (app_state == STATE_GAME_NET) {
         long long timeout = current_ms() - last_packet_time;
-        if (timeout > 1000) draw_text("CONNECTION LOST", 480, 360, 30.0f, 1, 0, 0);
+        // Increased Timeout Threshold to 3000ms
+        if (timeout > 3000) draw_text("CONNECTION LOST", 480, 360, 30.0f, 1, 0, 0);
     } else {
         draw_text("LOCAL DEMO", 1000, 50, 20.0f, 0, 1, 1);
     }
 
+    // Sniper Scope
+    if (me->current_weapon == WPN_SNIPER && zoom_held) {
+        glColor3f(0, 0, 0); glLineWidth(2.0f); glBegin(GL_LINES);
+        glVertex2f(0, 360); glVertex2f(1280, 360); glVertex2f(640, 0); glVertex2f(640, 720); glEnd();
+    } else {
+        glBegin(GL_LINES); glColor3f(0,1,1); glVertex2f(640-10, 360); glVertex2f(640+10, 360); glVertex2f(640, 360-10); glVertex2f(640, 360+10); glEnd();
+    }
     glEnable(GL_DEPTH_TEST); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix();
 }
 
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window *win = SDL_CreateWindow("SHANK PIT V29", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
+    SDL_Window *win = SDL_CreateWindow("SHANK PIT ONLINE v30", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
     SDL_GLContext gl = SDL_GL_CreateContext(win);
     glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluOrtho2D(0, 1280, 720, 0);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
@@ -238,16 +216,12 @@ int main(int argc, char* argv[]) {
             float fwd=0, str=0;
             if(k[SDL_SCANCODE_W]) fwd+=1; if(k[SDL_SCANCODE_S]) fwd-=1;
             if(k[SDL_SCANCODE_D]) str+=1; if(k[SDL_SCANCODE_A]) str-=1;
-            
-            // Mouse Inputs
-            int shoot = (SDL_GetMouseState(NULL,NULL) & SDL_BUTTON(SDL_BUTTON_LEFT));
-            int zoom = (SDL_GetMouseState(NULL,NULL) & SDL_BUTTON(SDL_BUTTON_RIGHT));
-            zoom_held = zoom; // Global for render
-
+            int shoot = (SDL_GetMouseState(NULL,NULL)&SDL_BUTTON(SDL_BUTTON_LEFT));
+            int zoom = (SDL_GetMouseState(NULL,NULL)&SDL_BUTTON(SDL_BUTTON_RIGHT));
+            zoom_held = zoom;
             int jump = k[SDL_SCANCODE_SPACE];
             int crouch = k[SDL_SCANCODE_LCTRL];
             int reload = k[SDL_SCANCODE_R];
-            
             int weapon = -1;
             if(k[SDL_SCANCODE_1]) weapon = WPN_KNIFE;
             if(k[SDL_SCANCODE_2]) weapon = WPN_MAGNUM;

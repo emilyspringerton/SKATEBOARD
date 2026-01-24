@@ -44,11 +44,17 @@ int main() {
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(PORT);
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    bind(sock, (struct sockaddr*)&server_addr, sizeof(server_addr));
+    
+    if (bind(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind Failed"); return 1;
+    }
+    
     int flags = fcntl(sock, F_GETFL, 0);
     fcntl(sock, F_SETFL, flags | O_NONBLOCK);
 
+    printf("🔥 SERVER ONLINE (PORT %d) | BOTS ACTIVE\n", PORT);
     local_init();
+
     struct sockaddr_in clients[MAX_CLIENTS];
     int client_active[MAX_CLIENTS] = {0};
     long long last_seen[MAX_CLIENTS] = {0};
@@ -58,37 +64,76 @@ int main() {
         socklen_t fromlen = sizeof(from);
         long long now = current_time_ms();
         
+        // 1. Receive Packets
         while (recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr*)&from, &fromlen) > 0) {
             Packet *pkt = (Packet*)buf;
             int pid = -1;
+            
+            // Match Existing
             for(int i=0; i<MAX_CLIENTS; i++) {
                 if (client_active[i] && clients[i].sin_addr.s_addr == from.sin_addr.s_addr && clients[i].sin_port == from.sin_port) {
                     pid = i; break;
                 }
             }
+            
+            // New Client
             if (pid == -1) {
                 for(int i=0; i<MAX_CLIENTS; i++) {
-                    if (!client_active[i] && !local_state.players[i].active) {
+                    // Reserve Slot 1 for Bot
+                    if (i != 1 && !client_active[i] && !local_state.players[i].active) {
                         client_active[i] = 1; clients[i] = from; pid = i;
                         local_state.players[i].active = 1;
                         local_state.players[i].health = 100;
                         local_state.players[i].pos.y = 5.0f;
+                        // Full Ammo
                         for(int j=0; j<MAX_WEAPONS; j++) local_state.players[i].ammo[j] = WPN_STATS[j].ammo_max;
+                        printf("Join: PID %d\n", pid);
                         break;
                     }
                 }
             }
+            
+            // Process Input
             if (pid != -1) {
                 last_seen[pid] = now;
                 if (pkt->type == PACKET_INPUT) {
                     ClientInput *in = (ClientInput*)pkt->data;
                     local_pid = pid;
-                    // Pass inputs including weapon switch
                     local_update(0.016f, in->fwd, in->strafe, in->yaw, in->pitch, in->shoot, in->weapon_req, in->jump, in->crouch, in->reload);
                 }
             }
         }
-        // Broadcast
+
+        // 2. Cleanup Timeouts
+        for(int i=0; i<MAX_CLIENTS; i++) {
+            if (client_active[i] && (now - last_seen[i] > 5000)) {
+                printf("Timeout: PID %d\n", i);
+                client_active[i] = 0;
+                local_state.players[i].active = 0;
+            }
+        }
+        
+        // 3. SERVER BOT LOGIC (Slot 1)
+        if (!client_active[1]) {
+             PlayerState *bot = &local_state.players[1];
+             bot->active = 1;
+             
+             // Move in a circle
+             bot->yaw += 2.0f;
+             bot->pos.x = 5.0f + sinf(now * 0.001f) * 3.0f;
+             bot->pos.z = 15.0f + cosf(now * 0.001f) * 3.0f;
+             if(bot->pos.y < 5.0f) bot->pos.y = 5.0f; // Floating slightly
+             
+             // Shoot periodically
+             if ((now / 500) % 4 == 0) {
+                 bot->current_weapon = WPN_AR;
+                 bot->is_shooting = 5;
+             } else {
+                 bot->is_shooting = 0;
+             }
+        }
+
+        // 4. Broadcast
         for(int i=0; i<MAX_CLIENTS; i++) {
             if (client_active[i]) {
                 Packet out; out.type = PACKET_STATE;
