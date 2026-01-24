@@ -51,9 +51,9 @@ void net_send_cmd(int cmd) {
     sendto(sock, (char*)&pkt, sizeof(int)*3 + (cmd==CMD_NAME?32:0), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
 }
 
-void net_send_input(float fwd, float strafe, int jump, int crouch, int shoot, int reload, int weapon, int zoom) {
+void net_send_input(float fwd, float strafe, int jump, int crouch, int shoot, int reload, int weapon, int zoom, int use) {
     Packet pkt; pkt.type = PACKET_INPUT; pkt.owner_id = my_player_id;
-    ClientInput in; in.fwd = fwd; in.strafe = strafe; in.yaw = cam_yaw; in.pitch = cam_pitch; in.jump = jump; in.crouch = crouch; in.shoot = shoot; in.reload = reload; in.weapon_req = weapon; in.zoom = zoom;
+    ClientInput in; in.fwd = fwd; in.strafe = strafe; in.yaw = cam_yaw; in.pitch = cam_pitch; in.jump = jump; in.crouch = crouch; in.shoot = shoot; in.reload = reload; in.weapon_req = weapon; in.zoom = zoom; in.use = use;
     memcpy(pkt.data, &in, sizeof(ClientInput));
     sendto(sock, (char*)&pkt, sizeof(int)*3 + sizeof(ClientInput), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
 }
@@ -77,126 +77,107 @@ void net_update() {
 
 void draw_cube(float sx, float sy, float sz) {
     glPushMatrix(); glScalef(sx, sy, sz); glBegin(GL_QUADS);
-    // Bevel effect (fake lighting)
-    // Top
-    glColor3f(1.0f, 1.0f, 1.0f); glVertex3f(-0.5,0.5,-0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,0.5,-0.5);
-    // Front
-    glColor3f(0.8f, 0.8f, 0.8f); glVertex3f(-0.5,-0.5,0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(-0.5,0.5,0.5);
-    // Back
-    glColor3f(0.8f, 0.8f, 0.8f); glVertex3f(0.5,-0.5,-0.5); glVertex3f(-0.5,-0.5,-0.5); glVertex3f(-0.5,0.5,-0.5); glVertex3f(0.5,0.5,-0.5);
-    // Left
-    glColor3f(0.6f, 0.6f, 0.6f); glVertex3f(-0.5,-0.5,-0.5); glVertex3f(-0.5,-0.5,0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(-0.5,0.5,-0.5);
-    // Right
-    glColor3f(0.6f, 0.6f, 0.6f); glVertex3f(0.5,-0.5,0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,0.5,0.5);
-    // Bottom
-    glColor3f(0.2f, 0.2f, 0.2f); glVertex3f(-0.5,-0.5,0.5); glVertex3f(-0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,0.5);
+    // Neon Bevels
+    glColor3f(0.0f, 1.0f, 1.0f); glVertex3f(-0.5,0.5,-0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,0.5,-0.5); // Top
+    glColor3f(0.0f, 0.5f, 0.5f); glVertex3f(-0.5,-0.5,0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(-0.5,0.5,0.5); // Front
+    glColor3f(0.0f, 0.5f, 0.5f); glVertex3f(0.5,-0.5,-0.5); glVertex3f(-0.5,-0.5,-0.5); glVertex3f(-0.5,0.5,-0.5); glVertex3f(0.5,0.5,-0.5); // Back
+    glColor3f(0.0f, 0.3f, 0.3f); glVertex3f(-0.5,-0.5,-0.5); glVertex3f(-0.5,-0.5,0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(-0.5,0.5,-0.5); // Left
+    glColor3f(0.0f, 0.3f, 0.3f); glVertex3f(0.5,-0.5,0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,0.5,0.5); // Right
+    glColor3f(0.0f, 0.1f, 0.1f); glVertex3f(-0.5,-0.5,0.5); glVertex3f(-0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,0.5); // Bottom
     glEnd(); glPopMatrix();
 }
 
-void draw_nameplate(Vec3 pos, char* name) {
-    GLdouble model[16]; glGetDoublev(GL_MODELVIEW_MATRIX, model);
-    GLdouble proj[16]; glGetDoublev(GL_PROJECTION_MATRIX, proj);
-    GLint view[4]; glGetIntegerv(GL_VIEWPORT, view);
-    GLdouble sx, sy, sz;
-    if (gluProject(pos.x, pos.y + 2.2f, pos.z, model, proj, view, &sx, &sy, &sz) == GL_TRUE) {
-        if (sz > 0.0f && sz < 1.0f) {
-            glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); gluOrtho2D(0, 1280, 720, 0);
-            glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity(); glDisable(GL_DEPTH_TEST);
-            int text_w = strlen(name) * 15;
-            // SHADOW
-            draw_text(name, (int)sx - (text_w/2) + 2, (int)(720 - sy) + 2, 20.0f, 0, 0, 0); 
-            // TEXT
-            draw_text(name, (int)sx - (text_w/2), (int)(720 - sy), 20.0f, 1, 1, 0);
-            glEnable(GL_DEPTH_TEST); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix();
-        }
-    }
+void draw_vehicle(VehicleState *v) {
+    glPushMatrix(); 
+    glTranslatef(v->pos.x, v->pos.y, v->pos.z);
+    glRotatef(-v->yaw, 0, 1, 0); // Yaw
+    glRotatef(v->pitch * 20.0f, 1, 0, 0); // Visual Pitch from suspension
+    glRotatef(v->roll * 20.0f, 0, 0, 1); // Visual Roll
+    
+    // Chassis (Green Warthog Style)
+    glColor3f(0.2f, 0.5f, 0.1f); 
+    glPushMatrix(); glTranslatef(0, 0.8f, 0); draw_cube(2.2f, 0.8f, 4.0f); glPopMatrix();
+    
+    // Windshield/Cockpit
+    glColor3f(0.1f, 0.1f, 0.1f);
+    glPushMatrix(); glTranslatef(0, 1.4f, -0.5f); draw_cube(1.8f, 0.6f, 2.0f); glPopMatrix();
+    
+    // Wheels (Floating pseudo-wheels)
+    glColor3f(0.1f, 0.1f, 0.1f);
+    float w=1.4f; float l=1.8f; float h=0.4f;
+    glPushMatrix(); glTranslatef(w, h, l); draw_cube(0.5f, 0.8f, 0.8f); glPopMatrix();
+    glPushMatrix(); glTranslatef(-w, h, l); draw_cube(0.5f, 0.8f, 0.8f); glPopMatrix();
+    glPushMatrix(); glTranslatef(w, h, -l); draw_cube(0.5f, 0.8f, 0.8f); glPopMatrix();
+    glPushMatrix(); glTranslatef(-w, h, -l); draw_cube(0.5f, 0.8f, 0.8f); glPopMatrix();
+    
+    glPopMatrix();
 }
 
-void draw_player(PlayerState *p, int tick) {
+void draw_player(PlayerState *p) {
+    if (!p->active || p->in_vehicle) return; // Don't draw if in car
     glPushMatrix(); glTranslatef(p->pos.x, p->pos.y, p->pos.z); glRotatef(-p->yaw, 0, 1, 0);
-    // Gold/Yellow Body (Like video "Shank")
     glColor3f(1.0f, 0.8f, 0.0f); glPushMatrix(); glTranslatef(0, 1.0f, 0); draw_cube(0.5f, 0.6f, 0.3f); glPopMatrix();
-    // Head
     glColor3f(1.0f, 0.9f, 0.5f); glPushMatrix(); glTranslatef(0, 1.5f, 0); draw_cube(0.3f, 0.3f, 0.3f); glPopMatrix();
     glPopMatrix();
-    draw_nameplate(p->pos, p->name);
-}
-
-void render_gun(PlayerState *me) {
-    glLoadIdentity(); glClear(GL_DEPTH_BUFFER_BIT); if (me->current_weapon == 4 && zoom_held) return;
-    float bob = sinf(local_state.server_tick * 0.2f) * 0.02f * (sqrtf(me->vel.x*me->vel.x + me->vel.z*me->vel.z) * 5.0f);
-    glTranslatef(0.3f, -0.3f + bob, -0.5f); glRotatef(180.0f, 0, 1, 0);
-    glColor3f(0.1f, 0.1f, 0.1f); glScalef(0.15f, 0.2f, 1.0f); draw_cube(1,1,1);
 }
 
 void render_game() {
-    // VOID SKY (Dark Blue/Black)
-    glClearColor(0.05f, 0.05f, 0.1f, 1.0f); 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
+    glClearColor(0.05f, 0.05f, 0.1f, 1.0f); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     PlayerState *me = &local_state.players[my_player_id];
-    float fov = (me->current_weapon == 4 && zoom_held) ? 20.0f : 70.0f;
-    glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluPerspective(fov, 1280.0f/720.0f, 0.1f, 1000.0f);
+    
+    // CAMERA LOGIC (1st vs 3rd Person)
+    glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluPerspective(70.0f, 1280.0f/720.0f, 0.1f, 1000.0f);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
-    glRotatef(-cam_pitch, 1.0f, 0.0f, 0.0f); glRotatef(-cam_yaw, 0.0f, 1.0f, 0.0f);
-    glTranslatef(-me->pos.x, -(me->pos.y + 1.7f), -me->pos.z);
     
-    // NEON CYAN GRID
-    glLineWidth(2.0f);
-    glBegin(GL_LINES); glColor3f(0.0f, 1.0f, 1.0f); // Cyan
-    for(int i=-50; i<=50; i+=2) { glVertex3f(i,0,-50); glVertex3f(i,0,50); glVertex3f(-50,0,i); glVertex3f(50,0,i); } 
-    glEnd();
+    if (me->in_vehicle) {
+        // 3rd Person Follow Cam
+        // Move camera back relative to view direction
+        float r = -cam_yaw * (3.14159f/180.0f);
+        float dist = 8.0f;
+        float cx = me->pos.x - sinf(r)*dist;
+        float cz = me->pos.z + cosf(r)*dist;
+        float cy = me->pos.y + 4.0f;
+        gluLookAt(cx, cy, cz, me->pos.x, me->pos.y + 1.0f, me->pos.z, 0, 1, 0);
+    } else {
+        // 1st Person
+        glRotatef(-cam_pitch, 1.0f, 0.0f, 0.0f); glRotatef(-cam_yaw, 0.0f, 1.0f, 0.0f);
+        glTranslatef(-me->pos.x, -(me->pos.y + 1.7f), -me->pos.z);
+    }
     
-    // MAP BLOCKS (Colored per type)
+    // GRID
+    glLineWidth(2.0f); glBegin(GL_LINES); glColor3f(0.0f, 1.0f, 1.0f); 
+    for(int i=-50; i<=50; i+=2) { glVertex3f(i,0,-50); glVertex3f(i,0,50); glVertex3f(-50,0,i); glVertex3f(50,0,i); } glEnd();
+    
+    // MAP
     for(int i=0; i<local_level.wall_count; i++) {
-        Wall *w = &local_level.walls[i]; 
+        Wall *w = &local_level.walls[i]; if(w->id==1) continue;
         glPushMatrix(); glTranslatef(w->x, w->y, w->z); glScalef(w->sx, w->sy, w->sz);
-        if (w->id == 1) continue; // Skip floor block (already have grid)
-        
-        // Block Color
-        if (w->id >= 10) glColor3f(0.8f, 0.2f, 0.8f); // Magenta blocks (Video style)
-        else glColor3f(0.2f, 0.2f, 0.8f); // Blue Walls
-        
-        draw_cube(1,1,1); 
-        glPopMatrix();
+        glColor3f(0.8f, 0.2f, 0.8f); draw_cube(1,1,1); glPopMatrix();
     }
 
-    for(int i=0; i<MAX_CLIENTS; i++) {
-        if (local_state.players[i].active && i != my_player_id) {
-            draw_player(&local_state.players[i], local_state.server_tick);
-        }
-    }
-    render_gun(me);
+    // ENTITIES
+    if (local_state.vehicle.active) draw_vehicle(&local_state.vehicle);
+    for(int i=0; i<MAX_CLIENTS; i++) draw_player(&local_state.players[i]);
     
+    // UI
     glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); gluOrtho2D(0, 1280, 720, 0);
     glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity(); glDisable(GL_DEPTH_TEST);
     
     char buf[128]; 
-    if (app_state == STATE_LOBBY) {
-        draw_text("SHANK PIT LOBBY v42", 50, 50, 40.0f, 1, 1, 0);
-        draw_text("[C] CREATE  [S] SEARCH  [J] JOIN", 50, 130, 20.0f, 0, 1, 1);
-        char name_ui[64]; sprintf(name_ui, "NAME: %s_", my_name);
-        draw_text(name_ui, 50, 250, 30.0f, 1, 1, 1);
-        draw_text(lobby_status, 50, 400, 30.0f, 1, 0.5, 0);
-    } else {
-        sprintf(buf, "HP %d  AMMO %d", me->health, me->ammo[me->current_weapon]); 
-        draw_text(buf, 50, 650, 40.0f, 1, 1, 1);
-        if (app_state == STATE_GAME_NET && current_ms() - last_packet_time > 3000) draw_text("CONNECTION LOST", 480, 360, 30.0f, 1, 0, 0);
-    }
-    float cx=640, cy=360;
-    glBegin(GL_LINES); glColor3f(0,1,1); glVertex2f(cx-10,cy); glVertex2f(cx+10,cy); glVertex2f(cx,cy-10); glVertex2f(cx,cy+10); glEnd(); 
+    if (me->in_vehicle) sprintf(buf, "DRIVING | [E] EXIT");
+    else sprintf(buf, "HP %d | [E] ENTER VEHICLE", me->health);
+    draw_text(buf, 50, 650, 40.0f, 1, 1, 1);
     
     glEnable(GL_DEPTH_TEST); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix();
 }
 
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window *win = SDL_CreateWindow("SHANK PIT v42 (SLIPPERY)", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
+    SDL_Window *win = SDL_CreateWindow("SHANK PIT v43 WARTHOG", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
     SDL_GLContext gl = SDL_GL_CreateContext(win);
     glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluOrtho2D(0, 1280, 720, 0); glMatrixMode(GL_MODELVIEW); glLoadIdentity();
     net_init(); SDL_StartTextInput(); particles_init(); last_packet_time = current_ms();
     int running = 1;
-    
     local_init(); 
 
     while(running) {
@@ -223,8 +204,10 @@ int main(int argc, char* argv[]) {
             float fwd=0, str=0; if(k[SDL_SCANCODE_W]) fwd++; if(k[SDL_SCANCODE_S]) fwd--; if(k[SDL_SCANCODE_D]) str++; if(k[SDL_SCANCODE_A]) str--;
             int shoot = (SDL_GetMouseState(NULL,NULL)&SDL_BUTTON(SDL_BUTTON_LEFT)); int zoom = (SDL_GetMouseState(NULL,NULL)&SDL_BUTTON(SDL_BUTTON_RIGHT)); zoom_held = zoom;
             int wpn=-1; if(k[SDL_SCANCODE_1]) wpn=0; if(k[SDL_SCANCODE_2]) wpn=1; if(k[SDL_SCANCODE_3]) wpn=2; if(k[SDL_SCANCODE_4]) wpn=3; if(k[SDL_SCANCODE_5]) wpn=4;
-            if(app_state==STATE_GAME_NET) net_send_input(fwd, str, k[SDL_SCANCODE_SPACE], k[SDL_SCANCODE_LCTRL], shoot, k[SDL_SCANCODE_R], wpn, zoom);
-            else { local_pid = 0; local_update(0.016f, fwd, str, cam_yaw, cam_pitch, shoot, wpn, k[SDL_SCANCODE_SPACE], k[SDL_SCANCODE_LCTRL], k[SDL_SCANCODE_R]); }
+            int use = k[SDL_SCANCODE_E];
+            
+            if(app_state==STATE_GAME_NET) net_send_input(fwd, str, k[SDL_SCANCODE_SPACE], k[SDL_SCANCODE_LCTRL], shoot, k[SDL_SCANCODE_R], wpn, zoom, use);
+            else { local_pid = 0; local_update(0.016f, fwd, str, cam_yaw, cam_pitch, shoot, wpn, k[SDL_SCANCODE_SPACE], k[SDL_SCANCODE_LCTRL], k[SDL_SCANCODE_R], use); }
         }
         render_game();
         SDL_GL_SwapWindow(win); SDL_Delay(16);
