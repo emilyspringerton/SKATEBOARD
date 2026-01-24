@@ -1,43 +1,46 @@
-// Source [10] - The Production Types
 package chain
 
 import (
-    "crypto/sha256"
-    "encoding/json"
-    "time"
+	"time"
 )
 
-type BlockHeader struct {
-    Height     uint64   `json:"height"`
-    PrevHash   [16]byte `json:"prev_hash"`
-    MerkleRoot [16]byte `json:"merkle_root"`
-    StateRoot  [16]byte `json:"state_root"`
-    Timestamp  int64    `json:"timestamp"`
-    Nonce      uint64   `json:"nonce"`
-    Difficulty uint64   `json:"difficulty"`
-    Miner      string   `json:"miner"`
-}
-
-type Block struct {
-    Header       BlockHeader         `json:"header"`
-    Transactions []Transaction       `json:"transactions"`
-    Approvals    []ValidatorApproval `json:"approvals"`
+type Account struct {
+	Address       string `json:"address"`
+	Nonce         uint64 `json:"nonce"`
+	Balance       uint64 `json:"balance"`
+	StakedAmount  uint64 `json:"staked_amount"`
 }
 
 type ValidatorApproval struct {
-    Validator string `json:"validator"`
-    Signature []byte `json:"signature"`
-    Timestamp int64  `json:"timestamp"`
+	Validator string `json:"validator"`
+	Signature []byte `json:"signature"`
+	Timestamp int64  `json:"timestamp"`
 }
 
-type Transaction struct {
-    ID        [16]byte `json:"id"`
-    Type      string   `json:"type"` // "transfer", "game_action", "stake"
-    From      string   `json:"from"`
-    To        string   `json:"to"`
-    Amount    uint64   `json:"amount"`
-    Nonce     uint64   `json:"nonce"`
-    Payload   []byte   `json:"payload"`
-    Signature []byte   `json:"signature"`
-    Timestamp int64    `json:"timestamp"`
+type BlockHeader struct {
+	Height     uint64   `json:"height"`
+	PrevHash   [32]byte `json:"prev_hash"`
+	StateRoot  [32]byte `json:"state_root"`
+	Timestamp  int64    `json:"timestamp"`
+	Nonce      uint64   `json:"nonce"`
+	Difficulty uint64   `json:"difficulty"`
+	Miner      string   `json:"miner"`
+}
+
+type Block struct {
+	Header       BlockHeader         `json:"header"`
+	Transactions []string            `json:"transactions"`
+	Approvals    []ValidatorApproval `json:"approvals"`
+}
+
+type Genesis struct {
+	ChainID     string            `json:"chain_id"`
+	GenesisTime time.Time         `json:"genesis_time"`
+	Consensus   ConsensusParams   `json:"consensus"`
+	Allocations map[string]uint64 `json:"allocations"`
+}
+
+type ConsensusParams struct {
+	PowDifficulty uint64 `json:"pow_difficulty"`
+	BlockTime     int    `json:"block_time"`
 }
