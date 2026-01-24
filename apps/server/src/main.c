@@ -122,7 +122,7 @@ int main() {
              bot->yaw += 2.0f;
              bot->pos.x = 5.0f + sinf(now * 0.001f) * 3.0f;
              bot->pos.z = 15.0f + cosf(now * 0.001f) * 3.0f;
-             if(bot->pos.y < 5.0f) bot->pos.y = 5.0f; // Floating slightly
+             if(bot->pos.y < 5.0f) bot->pos.y = 5.0f; 
              
              // Shoot periodically
              if ((now / 500) % 4 == 0) {

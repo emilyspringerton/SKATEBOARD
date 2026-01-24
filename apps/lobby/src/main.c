@@ -68,7 +68,7 @@ void draw_cube(float sx, float sy, float sz) {
     glVertex3f(-0.5,-0.5,0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(-0.5,0.5,0.5);
     glVertex3f(-0.5,-0.5,-0.5); glVertex3f(-0.5,0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,-0.5,-0.5);
     glVertex3f(-0.5,0.5,-0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,0.5,-0.5);
-    glVertex3f(-0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(-0.5,-0.5,0.5);
+    glVertex3f(-0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(0.5,-0.5,0.5);
     glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,-0.5,0.5);
     glVertex3f(-0.5,-0.5,-0.5); glVertex3f(-0.5,-0.5,0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(-0.5,0.5,-0.5);
     glEnd(); glPopMatrix();
@@ -216,12 +216,16 @@ int main(int argc, char* argv[]) {
             float fwd=0, str=0;
             if(k[SDL_SCANCODE_W]) fwd+=1; if(k[SDL_SCANCODE_S]) fwd-=1;
             if(k[SDL_SCANCODE_D]) str+=1; if(k[SDL_SCANCODE_A]) str-=1;
-            int shoot = (SDL_GetMouseState(NULL,NULL)&SDL_BUTTON(SDL_BUTTON_LEFT));
-            int zoom = (SDL_GetMouseState(NULL,NULL)&SDL_BUTTON(SDL_BUTTON_RIGHT));
-            zoom_held = zoom;
+            
+            // Mouse Inputs
+            int shoot = (SDL_GetMouseState(NULL,NULL) & SDL_BUTTON(SDL_BUTTON_LEFT));
+            int zoom = (SDL_GetMouseState(NULL,NULL) & SDL_BUTTON(SDL_BUTTON_RIGHT));
+            zoom_held = zoom; // Global for render
+
             int jump = k[SDL_SCANCODE_SPACE];
             int crouch = k[SDL_SCANCODE_LCTRL];
             int reload = k[SDL_SCANCODE_R];
+            
             int weapon = -1;
             if(k[SDL_SCANCODE_1]) weapon = WPN_KNIFE;
             if(k[SDL_SCANCODE_2]) weapon = WPN_MAGNUM;
