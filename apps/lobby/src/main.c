@@ -42,21 +42,33 @@ void net_init() {
 }
 
 void net_send_input(float fwd, float strafe, int jump, int crouch, int shoot, int reload, int weapon, int zoom) {
-    Packet pkt; pkt.type = PACKET_INPUT;
-    ClientInput *in = (ClientInput*)pkt.data;
-    in->fwd = fwd; in->strafe = strafe; in->yaw = cam_yaw; in->pitch = cam_pitch;
-    in->jump = jump; in->crouch = crouch; in->shoot = shoot; in->reload = reload;
-    in->weapon_req = weapon; in->zoom = zoom;
-    sendto(sock, (char*)&pkt, sizeof(pkt), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+    Packet pkt; 
+    pkt.type = PACKET_INPUT;
+    
+    // Copy data into packet buffer
+    ClientInput in;
+    in.fwd = fwd; in.strafe = strafe; in.yaw = cam_yaw; in.pitch = cam_pitch;
+    in.jump = jump; in.crouch = crouch; in.shoot = shoot; in.reload = reload;
+    in.weapon_req = weapon; in.zoom = zoom;
+    
+    memcpy(pkt.data, &in, sizeof(ClientInput));
+    
+    // CRITICAL FIX: Only send necessary bytes (Header + Data)
+    int packet_size = sizeof(int) + sizeof(ClientInput);
+    sendto(sock, (char*)&pkt, packet_size, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
 }
 
 void net_update() {
     char buf[4096];
-    while(recv(sock, buf, sizeof(buf), 0) > 0) {
+    int len;
+    while((len = recv(sock, buf, sizeof(buf), 0)) > 0) {
         Packet *pkt = (Packet*)buf;
         if (pkt->type == PACKET_STATE) {
-            memcpy(&local_state, pkt->data, sizeof(ServerState));
-            last_packet_time = current_ms();
+            // Verify size to prevent crash
+            if (len >= sizeof(int) + sizeof(ServerState)) {
+                memcpy(&local_state, pkt->data, sizeof(ServerState));
+                last_packet_time = current_ms();
+            }
         }
     }
 }
@@ -68,7 +80,7 @@ void draw_cube(float sx, float sy, float sz) {
     glVertex3f(-0.5,-0.5,0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(-0.5,0.5,0.5);
     glVertex3f(-0.5,-0.5,-0.5); glVertex3f(-0.5,0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,-0.5,-0.5);
     glVertex3f(-0.5,0.5,-0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,0.5,-0.5);
-    glVertex3f(-0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(0.5,-0.5,0.5);
+    glVertex3f(-0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(-0.5,-0.5,0.5);
     glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,-0.5,0.5);
     glVertex3f(-0.5,-0.5,-0.5); glVertex3f(-0.5,-0.5,0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(-0.5,0.5,-0.5);
     glEnd(); glPopMatrix();
@@ -145,16 +157,13 @@ void render_game() {
     char buf[128]; sprintf(buf, "HP %d  AMMO %d", me->health, me->ammo[me->current_weapon]); 
     draw_text(buf, 50, 650, 40.0f, 1, 1, 1);
     
-    // UI: Connection Status
     if (app_state == STATE_GAME_NET) {
         long long timeout = current_ms() - last_packet_time;
-        // Increased Timeout Threshold to 3000ms
         if (timeout > 3000) draw_text("CONNECTION LOST", 480, 360, 30.0f, 1, 0, 0);
     } else {
         draw_text("LOCAL DEMO", 1000, 50, 20.0f, 0, 1, 1);
     }
 
-    // Sniper Scope
     if (me->current_weapon == WPN_SNIPER && zoom_held) {
         glColor3f(0, 0, 0); glLineWidth(2.0f); glBegin(GL_LINES);
         glVertex2f(0, 360); glVertex2f(1280, 360); glVertex2f(640, 0); glVertex2f(640, 720); glEnd();
@@ -166,7 +175,7 @@ void render_game() {
 
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window *win = SDL_CreateWindow("SHANK PIT ONLINE v30", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
+    SDL_Window *win = SDL_CreateWindow("SHANK PIT ONLINE v33", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
     SDL_GLContext gl = SDL_GL_CreateContext(win);
     glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluOrtho2D(0, 1280, 720, 0);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
@@ -216,16 +225,12 @@ int main(int argc, char* argv[]) {
             float fwd=0, str=0;
             if(k[SDL_SCANCODE_W]) fwd+=1; if(k[SDL_SCANCODE_S]) fwd-=1;
             if(k[SDL_SCANCODE_D]) str+=1; if(k[SDL_SCANCODE_A]) str-=1;
-            
-            // Mouse Inputs
-            int shoot = (SDL_GetMouseState(NULL,NULL) & SDL_BUTTON(SDL_BUTTON_LEFT));
-            int zoom = (SDL_GetMouseState(NULL,NULL) & SDL_BUTTON(SDL_BUTTON_RIGHT));
-            zoom_held = zoom; // Global for render
-
+            int shoot = (SDL_GetMouseState(NULL,NULL)&SDL_BUTTON(SDL_BUTTON_LEFT));
+            int zoom = (SDL_GetMouseState(NULL,NULL)&SDL_BUTTON(SDL_BUTTON_RIGHT));
+            zoom_held = zoom;
             int jump = k[SDL_SCANCODE_SPACE];
             int crouch = k[SDL_SCANCODE_LCTRL];
             int reload = k[SDL_SCANCODE_R];
-            
             int weapon = -1;
             if(k[SDL_SCANCODE_1]) weapon = WPN_KNIFE;
             if(k[SDL_SCANCODE_2]) weapon = WPN_MAGNUM;

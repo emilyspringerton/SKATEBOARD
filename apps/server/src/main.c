@@ -45,9 +45,7 @@ int main() {
     server_addr.sin_port = htons(PORT);
     server_addr.sin_addr.s_addr = INADDR_ANY;
     
-    // Allow Address Reuse just in case
-    int opt = 1;
-    setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+    int opt = 1; setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     
     if (bind(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
         perror("Bind Failed"); return 1;
@@ -56,7 +54,7 @@ int main() {
     int flags = fcntl(sock, F_GETFL, 0);
     fcntl(sock, F_SETFL, flags | O_NONBLOCK);
 
-    printf("🔥 SERVER LISTENING ON NEW PORT %d\n", PORT);
+    printf("🔥 SERVER LISTENING ON NEW PORT %d (OPTIMIZED MTU)\n", PORT);
     local_init();
 
     struct sockaddr_in clients[MAX_CLIENTS];
@@ -68,10 +66,14 @@ int main() {
         socklen_t fromlen = sizeof(from);
         long long now = current_time_ms();
         
-        while (recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr*)&from, &fromlen) > 0) {
+        int len;
+        while ((len = recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr*)&from, &fromlen)) > 0) {
             Packet *pkt = (Packet*)buf;
-            int pid = -1;
             
+            // Validate minimal size (type int)
+            if (len < sizeof(int)) continue;
+            
+            int pid = -1;
             for(int i=0; i<MAX_CLIENTS; i++) {
                 if (client_active[i] && clients[i].sin_addr.s_addr == from.sin_addr.s_addr && clients[i].sin_port == from.sin_port) {
                     pid = i; break;
@@ -95,9 +97,13 @@ int main() {
             if (pid != -1) {
                 last_seen[pid] = now;
                 if (pkt->type == PACKET_INPUT) {
-                    ClientInput *in = (ClientInput*)pkt->data;
-                    local_pid = pid;
-                    local_update(0.016f, in->fwd, in->strafe, in->yaw, in->pitch, in->shoot, in->weapon_req, in->jump, in->crouch, in->reload);
+                    // Extract Input Data safely (packet might be small now)
+                    if (len >= sizeof(int) + sizeof(ClientInput)) {
+                        ClientInput in;
+                        memcpy(&in, pkt->data, sizeof(ClientInput));
+                        local_pid = pid;
+                        local_update(0.016f, in.fwd, in.strafe, in.yaw, in.pitch, in.shoot, in.weapon_req, in.jump, in.crouch, in.reload);
+                    }
                 }
             }
         }
@@ -110,7 +116,6 @@ int main() {
             }
         }
         
-        // Bot Logic
         if (!client_active[1]) {
              PlayerState *bot = &local_state.players[1];
              bot->active = 1;
@@ -118,19 +123,19 @@ int main() {
              bot->pos.x = 5.0f + sinf(now * 0.001f) * 3.0f;
              bot->pos.z = 15.0f + cosf(now * 0.001f) * 3.0f;
              if(bot->pos.y < 5.0f) bot->pos.y = 5.0f; 
-             
-             if ((now / 500) % 4 == 0) {
-                 bot->current_weapon = WPN_AR; bot->is_shooting = 5;
-             } else {
-                 bot->is_shooting = 0;
-             }
+             if ((now / 500) % 4 == 0) { bot->current_weapon = WPN_AR; bot->is_shooting = 5; } 
+             else { bot->is_shooting = 0; }
         }
 
         for(int i=0; i<MAX_CLIENTS; i++) {
             if (client_active[i]) {
-                Packet out; out.type = PACKET_STATE;
+                Packet out; 
+                out.type = PACKET_STATE;
                 memcpy(out.data, &local_state, sizeof(local_state));
-                sendto(sock, (char*)&out, sizeof(out), 0, (struct sockaddr*)&clients[i], sizeof(clients[i]));
+                
+                // CRITICAL FIX: Send only necessary bytes
+                int packet_size = sizeof(int) + sizeof(ServerState);
+                sendto(sock, (char*)&out, packet_size, 0, (struct sockaddr*)&clients[i], sizeof(clients[i]));
             }
         }
         SLEEP(16);
