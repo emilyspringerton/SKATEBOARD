@@ -7,13 +7,6 @@
 #define MAX_CLIENTS 10
 #define MAX_WEAPONS 5
 
-// Weapon IDs
-#define WPN_KNIFE 0
-#define WPN_MAGNUM 1
-#define WPN_AR 2
-#define WPN_SHOTGUN 3
-#define WPN_SNIPER 4
-
 // PACKET TYPES
 #define PACKET_INPUT 1
 #define PACKET_STATE 2
@@ -24,6 +17,14 @@
 #define CMD_SEARCH 1
 #define CMD_CREATE 2
 #define CMD_JOIN   3
+#define CMD_NAME   5  // <-- NEW: Set Name
+
+// Weapon IDs
+#define WPN_KNIFE 0
+#define WPN_MAGNUM 1
+#define WPN_AR 2
+#define WPN_SHOTGUN 3
+#define WPN_SNIPER 4
 
 typedef struct { float x, y, z; } Vec3;
 
@@ -32,15 +33,13 @@ typedef struct {
 } WeaponStats;
 
 static WeaponStats WPN_STATS[MAX_WEAPONS] = {
-    {WPN_KNIFE,   45, 20, 1,  0.0f,   0,  3.5f},
-    {WPN_MAGNUM,  24, 12, 1,  0.0f,   12, 200.0f}, 
-    {WPN_AR,      12, 6,  1,  0.04f,  30, 200.0f},
-    {WPN_SHOTGUN, 10, 50, 12, 0.22f,  8,  70.0f}, 
-    {WPN_SNIPER,  95, 70, 1,  0.0f,   5,  500.0f}
+    {0, 45, 20, 1, 0.0f, 0, 3.5f}, {1, 24, 12, 1, 0.0f, 12, 200.0f}, 
+    {2, 12, 6, 1, 0.04f, 30, 200.0f}, {3, 10, 50, 12, 0.22f, 8, 70.0f}, {4, 95, 70, 1, 0.0f, 5, 500.0f}
 };
 
 typedef struct {
     int active;
+    char name[32]; // <-- NEW: Player Name
     Vec3 pos; Vec3 vel;
     float yaw; float pitch;
     int health; int kills;
