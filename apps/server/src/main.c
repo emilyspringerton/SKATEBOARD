@@ -48,8 +48,9 @@ int main() {
     if (bind(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) { perror("Bind"); return 1; }
     int flags = fcntl(sock, F_GETFL, 0); fcntl(sock, F_SETFL, flags | O_NONBLOCK);
 
-    printf("🔥 SERVER PORT %d | ID ASSIGNMENT ENABLED\n", PORT);
+    printf("🔥 SERVER READY PORT %d\n", PORT);
     local_init();
+    strcpy(local_state.status_msg, "SERVER ONLINE");
 
     struct sockaddr_in clients[MAX_CLIENTS];
     int client_active[MAX_CLIENTS] = {0};
@@ -62,16 +63,34 @@ int main() {
         int len;
         
         while ((len = recvfrom(sock, buf, sizeof(buf), 0, (struct sockaddr*)&from, &fromlen)) > 0) {
-            if (len < sizeof(int)*2) continue;
+            if (len < sizeof(int)*3) continue; 
             Packet *pkt = (Packet*)buf;
-            int pid = -1;
             
+            if (pkt->type == PACKET_LOBBY_CMD) {
+                if (pkt->cmd_id == CMD_SEARCH) {
+                    Packet out; out.type = PACKET_LOBBY_INFO;
+                    int count = 0;
+                    for(int i=0;i<MAX_CLIENTS;i++) if(client_active[i]) count++;
+                    local_state.player_count = count;
+                    sprintf(local_state.status_msg, "ACTIVE: %d/%d PLAYERS", count, MAX_CLIENTS);
+                    memcpy(out.data, &local_state, sizeof(ServerState));
+                    sendto(sock, (char*)&out, sizeof(int)*3 + sizeof(ServerState), 0, (struct sockaddr*)&from, fromlen);
+                }
+                else if (pkt->cmd_id == CMD_CREATE) {
+                    local_init();
+                    memset(client_active, 0, sizeof(client_active));
+                    strcpy(local_state.status_msg, "GAME RESTARTED");
+                }
+                continue;
+            }
+
+            int pid = -1;
             for(int i=0; i<MAX_CLIENTS; i++) {
                 if (client_active[i] && clients[i].sin_addr.s_addr == from.sin_addr.s_addr && clients[i].sin_port == from.sin_port) {
                     pid = i; break;
                 }
             }
-            if (pid == -1) {
+            if (pid == -1 && pkt->type == PACKET_INPUT) {
                 for(int i=0; i<MAX_CLIENTS; i++) {
                     if (i != 1 && !client_active[i] && !local_state.players[i].active) {
                         client_active[i] = 1; clients[i] = from; pid = i;
@@ -87,7 +106,7 @@ int main() {
             if (pid != -1) {
                 last_seen[pid] = now;
                 if (pkt->type == PACKET_INPUT) {
-                    if (len >= sizeof(int)*2 + sizeof(ClientInput)) {
+                    if (len >= sizeof(int)*3 + sizeof(ClientInput)) {
                         ClientInput in; memcpy(&in, pkt->data, sizeof(ClientInput));
                         local_pid = pid;
                         local_update(0.016f, in.fwd, in.strafe, in.yaw, in.pitch, in.shoot, in.weapon_req, in.jump, in.crouch, in.reload);
@@ -113,9 +132,9 @@ int main() {
             if (client_active[i]) {
                 Packet out; 
                 out.type = PACKET_STATE;
-                out.owner_id = i; // STAMP ID
+                out.owner_id = i; 
                 memcpy(out.data, &local_state, sizeof(local_state));
-                int sz = sizeof(int)*2 + sizeof(ServerState);
+                int sz = sizeof(int)*3 + sizeof(ServerState);
                 sendto(sock, (char*)&out, sz, 0, (struct sockaddr*)&clients[i], sizeof(clients[i]));
             }
         }

@@ -14,6 +14,17 @@
 #define WPN_SHOTGUN 3
 #define WPN_SNIPER 4
 
+// PACKET TYPES
+#define PACKET_INPUT 1
+#define PACKET_STATE 2
+#define PACKET_LOBBY_CMD 3
+#define PACKET_LOBBY_INFO 4
+
+// LOBBY COMMANDS
+#define CMD_SEARCH 1
+#define CMD_CREATE 2
+#define CMD_JOIN   3
+
 typedef struct { float x, y, z; } Vec3;
 
 typedef struct {
@@ -40,15 +51,15 @@ typedef struct {
 
 typedef struct {
     int server_tick;
+    int player_count;
+    char status_msg[64];
     PlayerState players[MAX_CLIENTS];
 } ServerState;
 
-#define PACKET_INPUT 1
-#define PACKET_STATE 2
-
 typedef struct {
     int type;
-    int owner_id; // <-- ID of the sender/recipient
+    int owner_id; 
+    int cmd_id; 
     char data[4096];
 } Packet;
 

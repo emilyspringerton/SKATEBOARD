@@ -25,10 +25,10 @@ SOCKET sock;
 struct sockaddr_in server_addr;
 long long last_packet_time = 0;
 ServerState local_state; 
-int my_player_id = 0; // The ID we use to render
+int my_player_id = 0;
+char lobby_status[128] = "IDLE";
 
 float cam_yaw = 0; float cam_pitch = 0;
-char chat_buf[64] = {0};
 int zoom_held = 0; 
 
 long long current_ms() { return (long long)SDL_GetTicks(); }
@@ -39,21 +39,32 @@ void net_init() {
     u_long mode = 1; ioctlsocket(sock, FIONBIO, &mode);
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(PORT);
-    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1"); 
+    
+    struct hostent *he = gethostbyname("s.farthq.com");
+    if (he) { 
+        server_addr.sin_addr = *((struct in_addr*)he->h_addr);
+    } else {
+        server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    }
+}
+
+void net_send_cmd(int cmd) {
+    Packet pkt;
+    pkt.type = PACKET_LOBBY_CMD;
+    pkt.cmd_id = cmd;
+    sendto(sock, (char*)&pkt, sizeof(int)*3, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
 }
 
 void net_send_input(float fwd, float strafe, int jump, int crouch, int shoot, int reload, int weapon, int zoom) {
     Packet pkt; 
     pkt.type = PACKET_INPUT;
     pkt.owner_id = my_player_id;
-    
     ClientInput in;
     in.fwd = fwd; in.strafe = strafe; in.yaw = cam_yaw; in.pitch = cam_pitch;
     in.jump = jump; in.crouch = crouch; in.shoot = shoot; in.reload = reload;
     in.weapon_req = weapon; in.zoom = zoom;
     memcpy(pkt.data, &in, sizeof(ClientInput));
-    
-    sendto(sock, (char*)&pkt, sizeof(int)*2 + sizeof(ClientInput), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+    sendto(sock, (char*)&pkt, sizeof(int)*3 + sizeof(ClientInput), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
 }
 
 void net_update() {
@@ -62,11 +73,16 @@ void net_update() {
     while((len = recv(sock, buf, sizeof(buf), 0)) > 0) {
         Packet *pkt = (Packet*)buf;
         if (pkt->type == PACKET_STATE) {
-            if (len >= sizeof(int)*2 + sizeof(ServerState)) {
+            if (len >= sizeof(int)*3 + sizeof(ServerState)) {
                 memcpy(&local_state, pkt->data, sizeof(ServerState));
-                my_player_id = pkt->owner_id; // GET ID
+                my_player_id = pkt->owner_id;
                 last_packet_time = current_ms();
             }
+        }
+        else if (pkt->type == PACKET_LOBBY_INFO) {
+             ServerState info;
+             memcpy(&info, pkt->data, sizeof(ServerState));
+             sprintf(lobby_status, "%s", info.status_msg);
         }
     }
 }
@@ -118,10 +134,7 @@ void render_gun(PlayerState *me) {
 
 void render_game() {
     glClearColor(0.1f, 0.1f, 0.15f, 1.0f); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    // ATTACH CAMERA TO CORRECT ID
     PlayerState *me = &local_state.players[my_player_id];
-    
     float fov = (me->current_weapon == WPN_SNIPER && zoom_held) ? 20.0f : 70.0f;
     glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluPerspective(fov, 1280.0f/720.0f, 0.1f, 1000.0f);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
@@ -147,10 +160,7 @@ void render_game() {
 
     for(int i=0; i<MAX_CLIENTS; i++) {
         if (!local_state.players[i].active) continue;
-        
-        // DO NOT RENDER MY OWN BODY
         if (i == my_player_id) continue;
-        
         draw_bot(local_state.players[i].pos, -local_state.players[i].yaw, local_state.server_tick);
         if (me->hit_feedback == 2 && i==1) spawn_particle(local_state.players[i].pos, 5, 0, 0);
     }
@@ -158,18 +168,19 @@ void render_game() {
     
     glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); gluOrtho2D(0, 1280, 720, 0);
     glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity(); glDisable(GL_DEPTH_TEST);
-    char buf[128]; sprintf(buf, "HP %d  AMMO %d", me->health, me->ammo[me->current_weapon]); 
-    draw_text(buf, 50, 650, 40.0f, 1, 1, 1);
     
-    if (app_state == STATE_GAME_NET) {
-        long long timeout = current_ms() - last_packet_time;
-        if (timeout > 3000) draw_text("CONNECTION LOST", 480, 360, 30.0f, 1, 0, 0);
-        
-        // Debug ID
-        char id_buf[32]; sprintf(id_buf, "PLAYER ID: %d", my_player_id);
-        draw_text(id_buf, 50, 100, 20.0f, 0, 1, 0);
+    char buf[128]; 
+    if (app_state == STATE_LOBBY) {
+        // Handled in main loop
     } else {
-        draw_text("LOCAL DEMO", 1000, 50, 20.0f, 0, 1, 1);
+        sprintf(buf, "HP %d  AMMO %d", me->health, me->ammo[me->current_weapon]); 
+        draw_text(buf, 50, 650, 40.0f, 1, 1, 1);
+        if (app_state == STATE_GAME_NET) {
+            long long timeout = current_ms() - last_packet_time;
+            if (timeout > 3000) draw_text("CONNECTION LOST", 480, 360, 30.0f, 1, 0, 0);
+        } else {
+            draw_text("LOCAL DEMO", 1000, 50, 20.0f, 0, 1, 1);
+        }
     }
 
     if (me->current_weapon == WPN_SNIPER && zoom_held) {
@@ -183,7 +194,7 @@ void render_game() {
 
 int main(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window *win = SDL_CreateWindow("SHANK PIT ONLINE v34", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
+    SDL_Window *win = SDL_CreateWindow("SHANK PIT ONLINE v35 LOBBY", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
     SDL_GLContext gl = SDL_GL_CreateContext(win);
     glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluOrtho2D(0, 1280, 720, 0);
     glMatrixMode(GL_MODELVIEW); glLoadIdentity();
@@ -194,14 +205,14 @@ int main(int argc, char* argv[]) {
         while(SDL_PollEvent(&e)) {
             if(e.type == SDL_QUIT) running = 0;
             if (app_state == STATE_LOBBY) {
-                if(e.type == SDL_TEXTINPUT) strcat(chat_buf, e.text.text);
+                net_update(); 
                 if(e.type == SDL_KEYDOWN) {
-                    if (e.key.keysym.sym == SDLK_BACKSPACE && strlen(chat_buf) > 0) chat_buf[strlen(chat_buf)-1] = 0;
-                    if (e.key.keysym.sym == SDLK_a) {
-                         struct hostent *he = gethostbyname("s.farthq.com");
-                         if (he) { server_addr.sin_addr = *((struct in_addr*)he->h_addr); app_state = STATE_GAME_NET; }
+                    if (e.key.keysym.sym == SDLK_c) net_send_cmd(CMD_CREATE);
+                    if (e.key.keysym.sym == SDLK_s) net_send_cmd(CMD_SEARCH);
+                    if (e.key.keysym.sym == SDLK_j) {
                          SDL_SetRelativeMouseMode(SDL_TRUE); glEnable(GL_DEPTH_TEST);
                          glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluPerspective(70.0f, 1280.0f/720.0f, 0.1f, 1000.0f); glMatrixMode(GL_MODELVIEW);
+                         app_state = STATE_GAME_NET; 
                     }
                     if (e.key.keysym.sym == SDLK_d) {
                          local_init();
@@ -225,9 +236,11 @@ int main(int argc, char* argv[]) {
         if (app_state == STATE_LOBBY) {
             glClearColor(0.1, 0.1, 0.2, 1); glClear(GL_COLOR_BUFFER_BIT);
             draw_text("SHANK PIT LOBBY", 50, 50, 40.0f, 1, 1, 0);
-            draw_text("[A] JOIN LIVE SERVER", 50, 130, 20.0f, 0, 1, 0);
-            draw_text("[D] LOCAL DEMO", 50, 170, 20.0f, 0, 1, 1);
-            draw_text(chat_buf, 50, 600, 25.0f, 1, 1, 1); draw_text("_", 50 + strlen(chat_buf)*15, 600, 25.0f, 1, 1, 1);
+            draw_text("[C] CREATE MATCH (Reset)", 50, 130, 20.0f, 0, 1, 0);
+            draw_text("[S] SEARCH SERVER", 50, 170, 20.0f, 0, 1, 1);
+            draw_text("[J] JOIN GAME", 50, 210, 20.0f, 1, 1, 0);
+            draw_text("[D] LOCAL DEMO", 50, 250, 20.0f, 1, 1, 1);
+            draw_text(lobby_status, 50, 400, 30.0f, 1, 0.5, 0);
         } else {
             const Uint8 *k = SDL_GetKeyboardState(NULL);
             float fwd=0, str=0;
