@@ -20,13 +20,14 @@ typedef struct {
     int id; int dmg; int rof; int cnt; float spr; int ammo_max; float range;
 } WeaponStats;
 
-// UPDATED STATS (Added explicit range)
+// UPDATED WEAPON BALANCE (Phase 89)
 static WeaponStats WPN_STATS[MAX_WEAPONS] = {
-    {WPN_KNIFE,   45, 20, 1, 0.0f,  0,  3.5f},   // Range: 3.5 units
-    {WPN_MAGNUM,  45, 25, 1, 0.0f,  6,  200.0f}, // Range: 200
-    {WPN_AR,      12, 6,  1, 0.04f, 30, 200.0f},
-    {WPN_SHOTGUN, 8,  50, 8, 0.15f, 8,  50.0f},  // Shotgun limited range
-    {WPN_SNIPER,  95, 70, 1, 0.0f,  5,  500.0f}  // Sniper extreme range
+    {WPN_KNIFE,   45, 20, 1,  0.0f,   0,  3.5f},   // Knife
+    {WPN_MAGNUM,  45, 25, 1,  0.0f,   6,  200.0f}, // Magnum
+    {WPN_AR,      12, 6,  1,  0.04f,  30, 200.0f}, // AR
+    // SHOTGUN BUFF: 12 Pellets * 10 Dmg = 120 Potential. Wider Spread (0.22).
+    {WPN_SHOTGUN, 10, 50, 12, 0.22f,  8,  70.0f},  
+    {WPN_SNIPER,  95, 70, 1,  0.0f,   5,  500.0f}  // Sniper
 };
 
 typedef struct {
@@ -56,7 +57,7 @@ typedef struct {
     float fwd; float strafe; float yaw; float pitch;
     int jump; int crouch; int shoot; int reload;
     int weapon_req; 
-    int zoom; // 1 = Right Click Held
+    int zoom; 
 } ClientInput;
 
 #endif
