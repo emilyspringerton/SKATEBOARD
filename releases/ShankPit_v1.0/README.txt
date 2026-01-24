@@ -1,1 +1,0 @@
-ShankPit FPS Release v1.0\nControls: WASD + Mouse\n

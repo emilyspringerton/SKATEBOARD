@@ -1,1 +1,0 @@
-Fishing Client v1.0\nPowered by ShankEngine\n
