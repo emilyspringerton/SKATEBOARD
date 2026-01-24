@@ -39,24 +39,16 @@ long long current_time_ms() {
 
 int main() {
     SOCKET sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (sock == INVALID_SOCKET) { perror("Socket Failed"); return 1; }
-
     struct sockaddr_in server_addr;
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(PORT);
     server_addr.sin_addr.s_addr = INADDR_ANY;
-    
-    if(bind(sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Bind Failed"); return 1;
-    }
-    
+    bind(sock, (struct sockaddr*)&server_addr, sizeof(server_addr));
     int flags = fcntl(sock, F_GETFL, 0);
     fcntl(sock, F_SETFL, flags | O_NONBLOCK);
 
-    printf("🔥 ARSENAL SERVER LISTENING ON PORT %d\n", PORT);
     local_init();
-
     struct sockaddr_in clients[MAX_CLIENTS];
     int client_active[MAX_CLIENTS] = {0};
     long long last_seen[MAX_CLIENTS] = {0};
@@ -81,9 +73,7 @@ int main() {
                         local_state.players[i].active = 1;
                         local_state.players[i].health = 100;
                         local_state.players[i].pos.y = 5.0f;
-                        // Give full ammo on join
                         for(int j=0; j<MAX_WEAPONS; j++) local_state.players[i].ammo[j] = WPN_STATS[j].ammo_max;
-                        printf("Client Joined: PID %d\n", pid);
                         break;
                     }
                 }
@@ -93,24 +83,12 @@ int main() {
                 if (pkt->type == PACKET_INPUT) {
                     ClientInput *in = (ClientInput*)pkt->data;
                     local_pid = pid;
-                    // Pass the requested weapon!
+                    // Pass inputs including weapon switch
                     local_update(0.016f, in->fwd, in->strafe, in->yaw, in->pitch, in->shoot, in->weapon_req, in->jump, in->crouch, in->reload);
                 }
             }
         }
-
-        for(int i=0; i<MAX_CLIENTS; i++) {
-            if (client_active[i] && (now - last_seen[i] > 5000)) {
-                printf("Client %d Timed Out\n", i);
-                client_active[i] = 0;
-                local_state.players[i].active = 0;
-            }
-        }
-        
-        if (local_state.players[1].active && !client_active[1]) {
-             local_state.players[1].yaw += 1.0f;
-        }
-
+        // Broadcast
         for(int i=0; i<MAX_CLIENTS; i++) {
             if (client_active[i]) {
                 Packet out; out.type = PACKET_STATE;

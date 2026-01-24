@@ -33,12 +33,17 @@ Vec3 loc_get_aim(float yaw, float pitch, float spread) {
     return fwd;
 }
 
+// Distance Squared Helper
+float loc_dist_sq(Vec3 a, Vec3 b) {
+    return (a.x-b.x)*(a.x-b.x) + (a.y-b.y)*(a.y-b.y) + (a.z-b.z)*(a.z-b.z);
+}
+
 int loc_ray_hit(Vec3 origin, Vec3 dir, Vec3 target, float radius) {
     Vec3 oc = { target.x-origin.x, target.y-origin.y, target.z-origin.z };
     float t = (oc.x*dir.x + oc.y*dir.y + oc.z*dir.z);
     if (t < 0) return 0;
     Vec3 p = { origin.x + dir.x*t, origin.y + dir.y*t, origin.z + dir.z*t };
-    return (powf(p.x-target.x, 2) + powf(p.y-target.y, 2) + powf(p.z-target.z, 2)) < (radius*radius);
+    return loc_dist_sq(p, target) < (radius*radius);
 }
 
 void local_init() {
@@ -47,17 +52,12 @@ void local_init() {
     local_level.walls[local_level.wall_count++] = (Wall){6, 0.75f, 5, 1.0f, 0.75f, 1.0f, 1.0f, 0.6f, 0.0f};
 
     memset(&local_state, 0, sizeof(local_state));
-    
-    // Player 0 (You)
     local_state.players[0].active = 1; 
     local_state.players[0].health = 100;
     local_state.players[0].pos.y = 5.0f; 
     local_state.players[0].current_weapon = WPN_MAGNUM;
-    
-    // GIVE AMMO FOR EVERYTHING
     for(int j=0; j<MAX_WEAPONS; j++) local_state.players[0].ammo[j] = WPN_STATS[j].ammo_max;
 
-    // Player 1 (The Dummy)
     local_state.players[1].active = 1; 
     local_state.players[1].health = 100;
     local_state.players[1].pos.z = 15.0f; 
@@ -76,8 +76,6 @@ void local_shoot() {
     PlayerState *p = &local_state.players[local_pid];
     int w = p->current_weapon;
     if (p->attack_cooldown > 0 || p->reload_timer > 0) return;
-    
-    // Knife needs no ammo
     if (w != WPN_KNIFE && p->ammo[w] <= 0) return;
 
     if(w != WPN_KNIFE) p->ammo[w]--;
@@ -85,7 +83,7 @@ void local_shoot() {
     p->is_shooting = 5;
 
     int pellets = WPN_STATS[w].cnt;
-    float range = (w == WPN_KNIFE) ? 3.0f : 200.0f;
+    float range = WPN_STATS[w].range; // USE DEFINED RANGE
     Vec3 origin = { p->pos.x, p->pos.y + 1.5f, p->pos.z };
     
     for (int k=0; k<pellets; k++) {
@@ -94,6 +92,10 @@ void local_shoot() {
         
         for(int i=1; i<MAX_CLIENTS; i++) {
             if (!local_state.players[i].active) continue;
+            
+            // CRITICAL FIX: Check distance BEFORE hit logic
+            if (loc_dist_sq(origin, local_state.players[i].pos) > (range * range)) continue;
+
             if (loc_ray_hit(origin, dir, local_state.players[i].pos, 1.5f)) {
                 p->hit_feedback = 2; 
                 local_state.players[i].health -= WPN_STATS[w].dmg;
@@ -154,7 +156,6 @@ void local_update(float dt, float fwd, float strafe, float yaw, float pitch, int
     PlayerState *p = &local_state.players[local_pid];
     p->yaw = yaw; p->pitch = pitch;
     
-    // Weapon Switch Logic
     if (weapon >= 0 && weapon < MAX_WEAPONS) p->current_weapon = weapon;
 
     apply_friction(p, dt);
@@ -192,7 +193,6 @@ void local_update(float dt, float fwd, float strafe, float yaw, float pitch, int
     if (p->attack_cooldown > 0) p->attack_cooldown--;
     if (p->is_shooting > 0) p->is_shooting--;
 
-    // Update Bots
     for(int i=1; i<MAX_CLIENTS; i++) {
         if(!local_state.players[i].active) continue;
         PlayerState *curr = &local_state.players[i];
