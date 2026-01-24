@@ -1,0 +1,9 @@
+{
+  "title": "SHANKPIT ENGINE",
+  "tagline": "FRAGMENT THE VOID",
+  "hero_text": "A tiny, hackable FPS engine built in C. No bloat. Pure velocity. Join the development cycle live.",
+  "cta_text": "GET THE SOURCE",
+  "cta_link": "https://gitlab.com/danowski/skateboard",
+  "bg_color": "#050505",
+  "accent_color": "#00ffea"
+}
