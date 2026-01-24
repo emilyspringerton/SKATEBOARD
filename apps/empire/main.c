@@ -4,8 +4,7 @@
 #include <string.h>
 #include "main.h"
 
-// --- MANUAL JSON PARSER ---
-// Robust enough for the flat structure we defined
+// --- SHARED LOGIC ---
 void parse_str(const char* json, const char* key, char* dest) {
     char search[64]; sprintf(search, "\"%s\":", key);
     char* found = strstr(json, search);
@@ -24,22 +23,18 @@ long parse_int(const char* json, const char* key) {
 
 void empire_load(const char* filename, EmpireState* state) {
     FILE* f = fopen(filename, "r");
-    if(!f) { printf("❌ Failed to open %s\n", filename); return; }
+    if(!f) return;
     char buf[8192]; size_t len = fread(buf, 1, 8192, f); buf[len]=0; fclose(f);
     
-    // Parse Meta
     parse_str(buf, "empire_name", state->empire_name);
     state->gold = parse_int(buf, "gold");
     state->hourly_rate = parse_int(buf, "hourly_rate");
     
-    // Parse Agents (Simple scan)
     state->agent_count = 0;
     char* cursor = buf;
     while( (cursor = strstr(cursor, "name")) && state->agent_count < 64 ) {
-        // Backup to find the object start '{'
         char* obj_start = cursor;
         while(*obj_start != '{' && obj_start > buf) obj_start--;
-        
         Agent* a = &state->agents[state->agent_count++];
         parse_str(obj_start, "name", a->name);
         parse_str(obj_start, "task", a->task);
@@ -47,109 +42,144 @@ void empire_load(const char* filename, EmpireState* state) {
         a->xp = parse_int(obj_start, "xp");
         a->x = (float)parse_int(obj_start, "x");
         a->z = (float)parse_int(obj_start, "z");
-        
-        cursor += 10; // Advance
+        cursor += 10;
     }
 }
 
 void empire_generate_site(EmpireState* state) {
     FILE* f = fopen("output/index.html", "w");
     if(!f) return;
-    
-    fprintf(f, "<html><head><title>Empire Command</title>");
-    fprintf(f, "<style>body{background:#111;color:#eee;font-family:monospace;text-align:center;}");
-    fprintf(f, ".stat{border:1px solid #444;display:inline-block;padding:20px;margin:10px;width:200px;}");
-    fprintf(f, ".agent{background:#222;padding:10px;margin:5px auto;max-width:600px;text-align:left;border-left:5px solid #0f0;}");
-    fprintf(f, ".active{border-color:#0f0;} .idle{border-color:#aa0;}");
-    fprintf(f, "</style></head><body>");
-    
-    fprintf(f, "<h1>%s DASHBOARD</h1>", state->empire_name);
-    fprintf(f, "<div class='stat'><h2>GOLD</h2><p>%ld</p></div>", state->gold);
-    fprintf(f, "<div class='stat'><h2>XP/HR</h2><p>%ld</p></div>", state->hourly_rate);
-    fprintf(f, "<div class='stat'><h2>AGENTS</h2><p>%d</p></div>", state->agent_count);
-    
-    fprintf(f, "<h3>LIVE AGENTS</h3>");
-    for(int i=0; i<state->agent_count; i++) {
-        Agent* a = &state->agents[i];
-        fprintf(f, "<div class='agent %s'><strong>%s</strong> [%s]<br>Task: %s | XP: %d | Pos: %.0f, %.0f</div>", 
-                a->status, a->name, a->status, a->task, a->xp, a->x, a->z);
-    }
-    
-    fprintf(f, "</body></html>");
+    fprintf(f, "<html><body style='background:#111;color:#0f0;font-family:monospace'><h1>%s</h1>", state->empire_name);
+    fprintf(f, "<p>GOLD: %ld | XP/HR: %ld</p></body></html>", state->gold, state->hourly_rate);
     fclose(f);
 }
 
 #ifdef _WIN32
-// --- VISUALIZER MODE (Windows/SDL) ---
+// --- VISUALIZER MODE ---
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <GL/glu.h>
+#include "font.h" // FIXED: Local Include
+
+EmpireState state;
+float cam_x=0, cam_y=15, cam_z=20;
+float cam_yaw=0, cam_pitch=-30;
+int console_open = 0;
+char cmd_buf[256] = "";
+char log_buf[5][128];
+
+void log_msg(const char* msg) {
+    for(int i=4; i>0; i--) strcpy(log_buf[i], log_buf[i-1]);
+    strncpy(log_buf[0], msg, 127);
+}
+
+void process_command() {
+    if (strlen(cmd_buf) == 0) return;
+    if (strcmp(cmd_buf, "/help") == 0) {
+        log_msg("--- COMMANDS ---");
+        log_msg("/status  - Show economy");
+        log_msg("/reload  - Reload JSON");
+        log_msg("/quit    - Exit");
+    }
+    else if (strcmp(cmd_buf, "/reload") == 0) {
+        empire_load("empire.json", &state);
+        log_msg("Reloaded empire.json");
+    }
+    else if (strcmp(cmd_buf, "/status") == 0) {
+        char buf[128]; sprintf(buf, "GOLD: %ld | RATE: %ld/hr", state.gold, state.hourly_rate);
+        log_msg(buf);
+    }
+    else if (strcmp(cmd_buf, "/quit") == 0) exit(0);
+    else log_msg("Unknown command.");
+    cmd_buf[0] = 0;
+}
 
 void draw_cube(float x, float y, float z, float r, float g, float b) {
-    glPushMatrix(); glTranslatef(x,y,z); 
-    glColor3f(r,g,b);
+    glPushMatrix(); glTranslatef(x,y,z); glColor3f(r,g,b);
     glBegin(GL_QUADS);
-    glVertex3f(-0.5,0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(-0.5,-0.5,0.5); // Front
-    glVertex3f(-0.5,0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(-0.5,-0.5,-0.5); // Back
-    glVertex3f(-0.5,0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(-0.5,0.5,0.5); // Top
-    glVertex3f(-0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(-0.5,-0.5,0.5); // Bottom
-    glVertex3f(-0.5,0.5,-0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(-0.5,-0.5,0.5); glVertex3f(-0.5,-0.5,-0.5); // Left
-    glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(0.5,-0.5,-0.5); // Right
+    glVertex3f(-0.5,0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(-0.5,-0.5,0.5);
+    glVertex3f(-0.5,0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(-0.5,-0.5,-0.5);
+    glVertex3f(-0.5,0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(-0.5,0.5,0.5);
+    glVertex3f(-0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(-0.5,-0.5,0.5);
+    glVertex3f(-0.5,0.5,-0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(-0.5,-0.5,0.5); glVertex3f(-0.5,-0.5,-0.5);
+    glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(0.5,-0.5,-0.5);
     glEnd(); glPopMatrix();
 }
 
 int main(int argc, char* argv[]) {
-    EmpireState state;
     empire_load("empire.json", &state);
+    log_msg("Welcome to Empire Command.");
     
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window *win = SDL_CreateWindow("EMPIRE VIEWER v1", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
+    SDL_Window *win = SDL_CreateWindow("EMPIRE COMMAND v2", 100, 100, 1280, 720, SDL_WINDOW_OPENGL);
     SDL_GLContext gl = SDL_GL_CreateContext(win);
     
     glMatrixMode(GL_PROJECTION); glLoadIdentity(); gluPerspective(60.0f, 1280.0f/720.0f, 0.1f, 100.0f);
-    glMatrixMode(GL_MODELVIEW);
-    glEnable(GL_DEPTH_TEST);
+    glMatrixMode(GL_MODELVIEW); glEnable(GL_DEPTH_TEST);
 
     int running = 1;
-    float cam_angle = 0;
+    SDL_StartTextInput();
     
     while(running) {
-        SDL_Event e; while(SDL_PollEvent(&e)) if(e.type==SDL_QUIT) running=0;
+        SDL_Event e; 
+        while(SDL_PollEvent(&e)) {
+            if(e.type==SDL_QUIT) running=0;
+            if (console_open) {
+                if(e.type == SDL_KEYDOWN) {
+                    if(e.key.keysym.sym == SDLK_RETURN) { process_command(); console_open = 0; }
+                    if(e.key.keysym.sym == SDLK_ESCAPE) { console_open = 0; }
+                    if(e.key.keysym.sym == SDLK_BACKSPACE && strlen(cmd_buf) > 0) cmd_buf[strlen(cmd_buf)-1] = 0;
+                }
+                if(e.type == SDL_TEXTINPUT) strcat(cmd_buf, e.text.text);
+            } else {
+                if(e.type == SDL_KEYDOWN && (e.key.keysym.sym == SDLK_SLASH || e.key.keysym.sym == SDLK_RETURN)) { 
+                    console_open = 1; if(e.key.keysym.sym == SDLK_SLASH) strcpy(cmd_buf, "/"); else cmd_buf[0] = 0; 
+                }
+                if (e.type == SDL_MOUSEMOTION && (SDL_GetMouseState(NULL,NULL) & SDL_BUTTON(SDL_BUTTON_RIGHT))) {
+                    cam_yaw -= e.motion.xrel * 0.2f; cam_pitch -= e.motion.yrel * 0.2f;
+                }
+            }
+        }
         
-        glClearColor(0.1f, 0.1f, 0.2f, 1.0f); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glLoadIdentity();
-        gluLookAt(0, 20, 30, 0, 0, 0, 0, 1, 0); // God View Camera
-        glRotatef(cam_angle, 0, 1, 0);
+        if (!console_open) {
+            const Uint8* k = SDL_GetKeyboardState(NULL);
+            float r = -cam_yaw * 0.01745f;
+            float fwd_x = sinf(r), fwd_z = -cosf(r), right_x = cosf(r), right_z = sinf(r);
+            if(k[SDL_SCANCODE_W]) { cam_x += fwd_x*0.5f; cam_z += fwd_z*0.5f; }
+            if(k[SDL_SCANCODE_S]) { cam_x -= fwd_x*0.5f; cam_z -= fwd_z*0.5f; }
+            if(k[SDL_SCANCODE_D]) { cam_x += right_x*0.5f; cam_z += right_z*0.5f; }
+            if(k[SDL_SCANCODE_A]) { cam_x -= right_x*0.5f; cam_z -= right_z*0.5f; }
+            if(k[SDL_SCANCODE_SPACE]) cam_y += 0.5f;
+            if(k[SDL_SCANCODE_LSHIFT]) cam_y -= 0.5f;
+        }
+
+        glClearColor(0.1f, 0.1f, 0.15f, 1.0f); glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glLoadIdentity(); glRotatef(-cam_pitch, 1, 0, 0); glRotatef(-cam_yaw, 0, 1, 0); glTranslatef(-cam_x, -cam_y, -cam_z);
         
-        // Grid
-        glBegin(GL_LINES); glColor3f(0.3f, 0.3f, 0.3f);
-        for(int i=-20; i<=20; i+=2) { glVertex3f(i,0,-20); glVertex3f(i,0,20); glVertex3f(-20,0,i); glVertex3f(20,0,i); }
-        glEnd();
+        glBegin(GL_LINES); glColor3f(0.2f, 0.2f, 0.2f);
+        for(int i=-50; i<=50; i+=5) { glVertex3f(i,0,-50); glVertex3f(i,0,50); glVertex3f(-50,0,i); glVertex3f(50,0,i); } glEnd();
         
-        // Render Agents
         for(int i=0; i<state.agent_count; i++) {
             Agent* a = &state.agents[i];
-            float r = (strcmp(a->status, "active")==0) ? 0.0f : 1.0f; // Green active, Red idle
-            float g = (strcmp(a->status, "active")==0) ? 1.0f : 0.5f;
+            float r = (strcmp(a->status, "active")==0) ? 0.0f : 1.0f; 
+            float g = (strcmp(a->status, "active")==0) ? 1.0f : 0.0f; 
             draw_cube(a->x, 0.5f, a->z, r, g, 0.0f);
         }
         
-        cam_angle += 0.2f;
+        glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); gluOrtho2D(0, 1280, 720, 0);
+        glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity(); glDisable(GL_DEPTH_TEST);
+        
+        draw_text(state.empire_name, 20, 20, 30.0f, 1, 1, 1);
+        for(int i=0; i<5; i++) draw_text(log_buf[i], 20, 600 - (i*25), 18.0f, 0.7f, 0.7f, 0.7f);
+        
+        if (console_open) { char buf[300]; sprintf(buf, "> %s_", cmd_buf); draw_text(buf, 20, 680, 20.0f, 0, 1, 0); } 
+        else draw_text("[ / ] to open console", 20, 680, 18.0f, 0.5f, 0.5f, 0.5f);
+
+        glEnable(GL_DEPTH_TEST); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW); glPopMatrix();
         SDL_GL_SwapWindow(win); SDL_Delay(16);
     }
     return 0;
 }
-
 #else
-// --- GENERATOR MODE (Linux/Headless) ---
-int main() {
-    printf("📡 Empire Generator Starting...\n");
-    EmpireState state;
-    empire_load("empire.json", &state);
-    printf("   Loaded: %s (%d agents)\n", state.empire_name, state.agent_count);
-    
-    empire_generate_site(&state);
-    printf("   ✅ Dashboard generated in /output/index.html\n");
-    return 0;
-}
+int main() { EmpireState s; empire_load("empire.json", &s); empire_generate_site(&s); return 0; }
 #endif
