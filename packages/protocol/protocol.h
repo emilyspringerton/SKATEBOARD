@@ -20,14 +20,14 @@ typedef struct {
     int id; int dmg; int rof; int cnt; float spr; int ammo_max; float range;
 } WeaponStats;
 
-// UPDATED WEAPON BALANCE (Phase 89)
+// PHASE 90 BALANCE
 static WeaponStats WPN_STATS[MAX_WEAPONS] = {
-    {WPN_KNIFE,   45, 20, 1,  0.0f,   0,  3.5f},   // Knife
-    {WPN_MAGNUM,  45, 25, 1,  0.0f,   6,  200.0f}, // Magnum
-    {WPN_AR,      12, 6,  1,  0.04f,  30, 200.0f}, // AR
-    // SHOTGUN BUFF: 12 Pellets * 10 Dmg = 120 Potential. Wider Spread (0.22).
-    {WPN_SHOTGUN, 10, 50, 12, 0.22f,  8,  70.0f},  
-    {WPN_SNIPER,  95, 70, 1,  0.0f,   5,  500.0f}  // Sniper
+    {WPN_KNIFE,   45, 20, 1,  0.0f,   0,  3.5f},
+    // MAGNUM NERF: 24 Dmg (5 shots to kill). ROF 12 (Fast fire).
+    {WPN_MAGNUM,  24, 12, 1,  0.0f,   12, 200.0f}, 
+    {WPN_AR,      12, 6,  1,  0.04f,  30, 200.0f},
+    {WPN_SHOTGUN, 10, 50, 12, 0.22f,  8,  70.0f}, // Kept Buff
+    {WPN_SNIPER,  95, 70, 1,  0.0f,   5,  500.0f}
 };
 
 typedef struct {
