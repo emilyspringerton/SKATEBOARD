@@ -104,3 +104,5 @@ float map_resolve_collision(GameMap *map, Vec3 *pos, Vec3 *vel) {
     if (pos->y < -20.0f) { pos->y = 10.0f; pos->x = 0; pos->z = 0; vel->y = 0; }
     return detected_friction;
 }
+
+int map_check_point(GameMap *m, float x, float y, float z) { return (y < 0); }
