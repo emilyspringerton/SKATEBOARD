@@ -9,12 +9,12 @@ build-shankpit:
     - apt-get update -qy
     - apt-get install -y build-essential libsdl2-dev libgl1-mesa-dev libglu1-mesa-dev
     
-    # 📝 OVERWRITE PROTOCOL: Now including Weapon IDs and Vec3 logic
     - |
       cat > packages/protocol/protocol.h <<EOF
       #ifndef PROTOCOL_H
       #define PROTOCOL_H
       #include <stdint.h>
+      #include <stdbool.h>
 
       #define PORT 6969
       #define MAX_CLIENTS 10
@@ -23,7 +23,6 @@ build-shankpit:
       #define MAX_VEHICLES 10
       #define MATCH_DURATION 7200
 
-      // Weapon IDs
       #define WPN_KNIFE 0
       #define WPN_MAGNUM 1
       #define WPN_AR 2
@@ -33,24 +32,19 @@ build-shankpit:
       typedef struct { float x, y, z; } Vec3;
 
       typedef struct { 
-          int active; 
-          int owner_id; 
-          int timer; 
-          Vec3 pos; 
-          Vec3 vel; 
+          int active; int owner_id; int timer; 
+          Vec3 pos; Vec3 vel; 
       } GrenadeState;
 
       typedef struct {
-          int id; 
-          int active;
+          int id; int active;
           Vec3 pos; Vec3 vel;
           float yaw, pitch, roll;
           int driver_id;
       } VehicleState;
 
       typedef struct {
-          int active;
-          char name[32];
+          int active; char name[32];
           Vec3 pos; Vec3 vel;
           float yaw; float pitch;
           int health; int shield; int kills; int deaths;
@@ -63,9 +57,7 @@ build-shankpit:
       } PlayerState;
 
       typedef struct {
-          int server_tick;
-          int player_count;
-          int match_timer;
+          int server_tick; int player_count; int match_timer;
           char status_msg[64];
           PlayerState players[MAX_CLIENTS];
           VehicleState vehicles[MAX_VEHICLES];
@@ -75,6 +67,7 @@ build-shankpit:
       typedef struct {
           float fwd; float strafe; float yaw; float pitch;
           int weapon_req; int shoot; int throw_grenade; int interact; 
+          int show_scores; // Fixed: Added for net.c
           uint32_t render_tick;
       } ClientPacket;
 
@@ -86,9 +79,7 @@ build-shankpit:
       #endif
       EOF
 
-    # 🛠️ PATCH MAP: Add the missing map_check_point function to map.c
-    - |
-      echo "int map_check_point(GameMap *m, float x, float y, float z) { return (y < 0); }" >> packages/map/map.c
+    - echo "int map_check_point(GameMap *m, float x, float y, float z) { return (y < 0); }" >> packages/map/map.c
 
   script:
     - mkdir -p bin
