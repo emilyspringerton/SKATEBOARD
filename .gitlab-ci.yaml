@@ -9,29 +9,88 @@ build-shankpit:
     - apt-get update -qy
     - apt-get install -y build-essential libsdl2-dev libgl1-mesa-dev libglu1-mesa-dev
     
-    # 🛠️ PATCH PROTOCOL: Inject missing members into PlayerState and ServerState
-    # This prevents the "has no member named" errors by ensuring the structs match the server logic.
+    # 📝 OVERWRITE PROTOCOL: Providing a clean, unified header for the compiler
     - |
-      sed -i '/int in_vehicle;/a \    int grenades; int shield; int deaths; int vehicle_id;' packages/protocol/protocol.h
-      sed -i '/VehicleState vehicle;/a \    int match_timer; VehicleState vehicles[10]; GrenadeState grenades[16];' packages/protocol/protocol.h
-      sed -i '/typedef struct {/i \typedef struct { int active; int owner_id; int timer; Vec3 pos; Vec3 vel; } GrenadeState;' packages/protocol/protocol.h
-      sed -i '/typedef struct {/i \#define MAX_GRENADES 16\n#define MAX_VEHICLES 10\n#define MATCH_DURATION 7200\n#define PORT 6969' packages/protocol/protocol.h
-      sed -i '/typedef struct {/i \typedef struct { float fwd; float strafe; float yaw; float pitch; int weapon_req; int shoot; int throw_grenade; int interact; uint32_t render_tick; } ClientPacket;' packages/protocol/protocol.h
+      cat > packages/protocol/protocol.h <<EOF
+      #ifndef PROTOCOL_H
+      #define PROTOCOL_H
+      #include <stdint.h>
+
+      #define PORT 6969
+      #define MAX_CLIENTS 10
+      #define MAX_WEAPONS 5
+      #define MAX_GRENADES 16
+      #define MAX_VEHICLES 10
+      #define MATCH_DURATION 7200
+
+      typedef struct { float x, y, z; } Vec3;
+
+      typedef struct { 
+          int active; 
+          int owner_id; 
+          int timer; 
+          Vec3 pos; 
+          Vec3 vel; 
+      } GrenadeState;
+
+      typedef struct {
+          int id; // Added to match server.c:165
+          int active;
+          Vec3 pos; Vec3 vel;
+          float yaw, pitch, roll;
+          int driver_id;
+      } VehicleState;
+
+      typedef struct {
+          int active;
+          char name[32];
+          Vec3 pos; Vec3 vel;
+          float yaw; float pitch;
+          int health; int shield; int kills; int deaths;
+          int current_weapon; int ammo[MAX_WEAPONS];
+          int attack_cooldown; int is_shooting;
+          int hit_feedback; int color; int reload_timer;
+          int in_vehicle; int vehicle_id;
+          int grenades;
+          float ground_friction;
+      } PlayerState;
+
+      typedef struct {
+          int server_tick;
+          int player_count;
+          int match_timer;
+          char status_msg[64];
+          PlayerState players[MAX_CLIENTS];
+          VehicleState vehicles[MAX_VEHICLES];
+          GrenadeState grenades[MAX_GRENADES];
+      } ServerState;
+
+      typedef struct {
+          float fwd; float strafe; float yaw; float pitch;
+          int weapon_req; int shoot; int throw_grenade; int interact; 
+          uint32_t render_tick;
+      } ClientPacket;
+
+      typedef struct { int id; int dmg; int rof; int cnt; float spr; int ammo_max; float range; } WeaponStats;
+      static WeaponStats WPN_STATS[MAX_WEAPONS] = {
+          {0, 45, 20, 1, 0.0f, 0, 3.5f}, {1, 24, 12, 1, 0.0f, 12, 200.0f}, 
+          {2, 12, 6, 1, 0.04f, 30, 200.0f}, {3, 10, 50, 12, 0.22f, 8, 70.0f}, {4, 95, 70, 1, 0.0f, 5, 500.0f}
+      };
+      #endif
+      EOF
 
   script:
     - mkdir -p bin
-
-    # 1. Build Game Server
-    # We include the math library (-lm) and set the include paths
+    # 1. Build Game Server (including math lib)
     - gcc services/game-server/src/server.c -o bin/shank_server -lm -Ipackages/protocol -Ipackages/map -Iservices/game-server/src
-
+    
     # 2. Build ShankPit Client
     - gcc apps/shank-fps/src/main.c -o bin/shank_client -lSDL2 -lGL -lGLU -lm -Ipackages/protocol -Ipackages/map -Iapps/shank-fps/src
-
+    
     # 3. Build Master Server (Go)
     - cd services/master-server && go build -o ../../bin/master_server . && cd ../..
 
-    - echo "✅ Build Successful. Binaries generated in bin/"
+    - echo "✅ Build Successful!"
 
   artifacts:
     paths:
