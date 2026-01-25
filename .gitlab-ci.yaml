@@ -1,0 +1,36 @@
+# Use a Go-based image since the server needs Go 1.21+
+image: golang:1.21
+
+stages:
+  - build
+
+build-shankpit:
+  stage: build
+  before_script:
+    # Update package lists and install SDL2 development libraries
+    - apt-get update -qy
+    - apt-get install -y build-essential libsdl2-dev libgl1-mesa-dev libglu1-mesa-dev
+  
+  script:
+    # 1. Create bin directory for local build verification
+    - mkdir -p bin
+
+    # 2. Build the Game Server (C-based server logic)
+    # Compiling the server found in services/game-server/src/
+    - gcc services/game-server/src/server.c -o bin/shank_server -lm -Ipackages/protocol -Ipackages/map
+
+    # 3. Build the ShankPit Client (C/SDL2)
+    # Compiling the client found in apps/shank-fps/src/
+    - gcc apps/shank-fps/src/main.c -o bin/shank_client -lSDL2 -lGL -lGLU -lm -Ipackages/protocol -Ipackages/map
+
+    # 4. Build the Master Server (Go-based)
+    # Navigating to the Go service to build the binary
+    - cd services/master-server && go build -o ../../bin/master_server . && cd ../..
+
+    - echo "Build Complete. Binaries are in the bin/ directory."
+
+  # Defining paths to keep the binaries within the GitLab runner for this stage
+  artifacts:
+    paths:
+      - bin/
+    expire_in: 1 hour
