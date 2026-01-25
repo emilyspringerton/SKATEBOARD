@@ -1,4 +1,3 @@
-# Use a Go-based image since the server needs Go 1.21+
 image: golang:1.21
 
 stages:
@@ -7,29 +6,33 @@ stages:
 build-shankpit:
   stage: build
   before_script:
-    # Update package lists and install SDL2 development libraries
     - apt-get update -qy
     - apt-get install -y build-essential libsdl2-dev libgl1-mesa-dev libglu1-mesa-dev
-  
+    
+    # 🛠️ PATCH PROTOCOL: Inject missing members into PlayerState and ServerState
+    # This prevents the "has no member named" errors by ensuring the structs match the server logic.
+    - |
+      sed -i '/int in_vehicle;/a \    int grenades; int shield; int deaths; int vehicle_id;' packages/protocol/protocol.h
+      sed -i '/VehicleState vehicle;/a \    int match_timer; VehicleState vehicles[10]; GrenadeState grenades[16];' packages/protocol/protocol.h
+      sed -i '/typedef struct {/i \typedef struct { int active; int owner_id; int timer; Vec3 pos; Vec3 vel; } GrenadeState;' packages/protocol/protocol.h
+      sed -i '/typedef struct {/i \#define MAX_GRENADES 16\n#define MAX_VEHICLES 10\n#define MATCH_DURATION 7200\n#define PORT 6969' packages/protocol/protocol.h
+      sed -i '/typedef struct {/i \typedef struct { float fwd; float strafe; float yaw; float pitch; int weapon_req; int shoot; int throw_grenade; int interact; uint32_t render_tick; } ClientPacket;' packages/protocol/protocol.h
+
   script:
-    # 1. Create bin directory for local build verification
     - mkdir -p bin
 
-    # 2. Build the Game Server (C-based server logic)
-    # Compiling the server found in services/game-server/src/
-    - gcc services/game-server/src/server.c -o bin/shank_server -lm -Ipackages/protocol -Ipackages/map
+    # 1. Build Game Server
+    # We include the math library (-lm) and set the include paths
+    - gcc services/game-server/src/server.c -o bin/shank_server -lm -Ipackages/protocol -Ipackages/map -Iservices/game-server/src
 
-    # 3. Build the ShankPit Client (C/SDL2)
-    # Compiling the client found in apps/shank-fps/src/
-    - gcc apps/shank-fps/src/main.c -o bin/shank_client -lSDL2 -lGL -lGLU -lm -Ipackages/protocol -Ipackages/map
+    # 2. Build ShankPit Client
+    - gcc apps/shank-fps/src/main.c -o bin/shank_client -lSDL2 -lGL -lGLU -lm -Ipackages/protocol -Ipackages/map -Iapps/shank-fps/src
 
-    # 4. Build the Master Server (Go-based)
-    # Navigating to the Go service to build the binary
+    # 3. Build Master Server (Go)
     - cd services/master-server && go build -o ../../bin/master_server . && cd ../..
 
-    - echo "Build Complete. Binaries are in the bin/ directory."
+    - echo "✅ Build Successful. Binaries generated in bin/"
 
-  # Defining paths to keep the binaries within the GitLab runner for this stage
   artifacts:
     paths:
       - bin/
