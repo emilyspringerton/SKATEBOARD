@@ -89,3 +89,38 @@ A meta-layer for managing bots and agents across digital realms.
 
 
 
+----
+
+
+🛹 FARTCO AMERICA: THE SKATECHAIN FOUNDRY
+AI-Accelerated Monorepo | Fragment The Void
+
+A decentralized polyglot metaverse connecting high-performance C game clients with a Go-based blockchain backend. This is the "Witch Engine" foundry for high-velocity software architecture, procedural graphics, and cross-chain state management.
+
+🏗️ The Architecture Stack
+🔗 Blockchain & Services (Go)
+Skate Node: Custom Layer-1 Blockchain featuring Hybrid PoW/PoL Consensus and P2P GossipSub.
+
+DNS-Server: Persistent MMO backend for DragonsNShit utilizing BadgerDB for state consistency and TCP for high-reliability world sync.
+
+Bridge Node: ZK-SNARK Prover for cross-chain state root submission to Ethereum.
+
+Master Server: Global Auth (Google OAuth) and Matchmaking.
+
+🎮 Game Clients (C/SDL2/OpenGL)
+ShankPit (FPS): Quake-style arena shooter with "Slippery Neon" physics and procedural recoil.
+
+DragonsNShit (MMO): Persistent world exploration with rotoscoped voxel graphics and dual-outline rendering (Town & Forest zones).
+
+Empire of the Worlds: Automation dashboard for managing bots and agents across digital realms.
+
+Fishing: Chill economy loop featuring RNG fairness and inventory persistence.
+
+🌐 Web & Tooling
+Static Site Generator (SSG): A lightweight Go-based engine that transforms empire.json and content.json into the public-facing farthq.com dashboard.
+
+Lightweight Web Server: A high-concurrency Go server for serving the SSG output and handling light API requests.
+
+Witch Editor: In-engine, fixed-buffer text editor for live-coding and empire.json manipulation.
+
+Turtle Library: Math-based 2D/3D vector simulation for low-footprint graphics.
