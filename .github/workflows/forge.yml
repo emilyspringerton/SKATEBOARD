@@ -30,9 +30,6 @@ jobs:
 
       - name: 📜 Forge The Construct
         run: python scripts/construct_builder.py
-
-      - name: 🌐 Generate Site
-        run: python scripts/site_generator.py
       
       - name: 🪟 Compile Windows
         run: |
@@ -54,7 +51,7 @@ jobs:
       - name: 📦 Upload Unified Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SKATEBOARD_COMPLETE_BUILD
+          name: SKATEBOARD_LATEST_BUILD
           path: |
             shank_pit.exe
             shank_pit.bin
@@ -64,4 +61,3 @@ jobs:
             fishing_game.bin
             SDL2.dll
             SKATEBOARD_CONSTRUCT.txt
-            dist/
