@@ -1,0 +1,13 @@
+{
+  "chain_id": "skatechain-1",
+  "genesis_time": "2026-01-24T12:00:00Z",
+  "consensus": {
+    "pow_difficulty": 1000,
+    "block_time": 10
+  },
+  "allocations": {
+    "skate1_foundation": 1000000000,
+    "skate1_dev_fund": 50000000,
+    "skate1_faucet": 1000000
+  }
+}

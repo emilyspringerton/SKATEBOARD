@@ -1,0 +1,17 @@
+{
+  "meta": {
+    "empire_name": "Iron Syndicate",
+    "owner": "Emiree",
+    "last_updated": "2026-01-24 12:00"
+  },
+  "economy": {
+    "gold": 15400000,
+    "hourly_rate": 250000
+  },
+  "agents": [
+    {"name":"Miner_Alpha","task":"mining_coal","xp":35000,"status":"active","x":10,"z":5},
+    {"name":"Market_Bot_7","task":"flipping","xp":0,"status":"idle","x":-5,"z":-5},
+    {"name":"Slayer_01","task":"combat","xp":120000,"status":"active","x":2,"z":8},
+    {"name":"Woodcutter_X","task":"chopping","xp":4500,"status":"active","x":-8,"z":8}
+  ]
+}
