@@ -1,6 +1,8 @@
 #ifndef MAP_H
 #define MAP_H
 
+#include <stdint.h>
+#include <stdbool.h>
 #include "physics.h"
 
 #define MAX_WALLS 1024
