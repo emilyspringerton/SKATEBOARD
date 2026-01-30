@@ -10,54 +10,38 @@ jobs:
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
-      
       - name: 🐍 Setup Python
         uses: actions/setup-python@v4
-        with:
-          python_version: '3.10'
-      
       - name: 🛠️ Install Build Tools
         run: sudo apt-get update && sudo apt-get install -y mingw-w64 libsdl2-dev libgl1-mesa-dev libglu1-mesa-dev
-
       - name: 📥 Fetch SDL2 (MinGW)
         run: |
           wget https://github.com/libsdl-org/SDL/releases/download/release-2.28.5/SDL2-devel-2.28.5-mingw.tar.gz
           tar xzf SDL2-devel-2.28.5-mingw.tar.gz
           mv SDL2-2.28.5/x86_64-w64-mingw32 sdl2_win
-
       - name: 🔨 Forge Source Code
         run: python scripts/phase_ignition.py
-
       - name: 📜 Forge The Construct
         run: python scripts/construct_builder.py
-      
       - name: 🪟 Compile Windows
         run: |
-          W_INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol -Ipackages/map -Isdl2_win/include/SDL2 -Dmain=SDL_main"
+          W_INC="-Ipackages/common -Ipackages/simulation -Isdl2_win/include/SDL2 -Dmain=SDL_main"
           W_LIB="-Lsdl2_win/lib -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -lm"
-          x86_64-w64-mingw32-gcc -o shank_pit.exe apps/shank-fps/src/main.c $W_INC $W_LIB
-          x86_64-w64-mingw32-gcc -o empire_of_the_worlds.exe apps/lobby/src/main.c $W_INC $W_LIB
-          x86_64-w64-mingw32-gcc -o fishing_game.exe apps/fishing/src/main.c $W_INC $W_LIB
+          x86_64-w64-mingw32-gcc -o shank_pit.exe apps/shank-fps/src/main.c packages/common/physics.c $W_INC $W_LIB
+          x86_64-w64-mingw32-gcc -o empire_of_the_worlds.exe apps/lobby/src/main.c packages/common/physics.c $W_INC $W_LIB
           cp sdl2_win/bin/SDL2.dll .
-
       - name: 🐧 Compile Linux
         run: |
-          L_INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol -Ipackages/map"
+          L_INC="-Ipackages/common -Ipackages/simulation"
           L_LIB="$(sdl2-config --cflags --libs) -lGL -lGLU -lm"
-          gcc -o shank_pit.bin apps/shank-fps/src/main.c $L_INC $L_LIB
-          gcc -o empire_of_the_worlds.bin apps/lobby/src/main.c $L_INC $L_LIB
-          gcc -o fishing_game.bin apps/fishing/src/main.c $L_INC $L_LIB
-
-      - name: 📦 Upload Unified Artifacts
+          gcc -o shank_pit.bin apps/shank-fps/src/main.c packages/common/physics.c $L_INC $L_LIB
+          gcc -o empire_of_the_worlds.bin apps/lobby/src/main.c packages/common/physics.c $L_INC $L_LIB
+      - name: 📦 Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SKATEBOARD_LATEST_BUILD
+          name: SKATEBOARD_PHYSICS_BUILD
           path: |
-            shank_pit.exe
-            shank_pit.bin
-            empire_of_the_worlds.exe
-            empire_of_the_worlds.bin
-            fishing_game.exe
-            fishing_game.bin
+            *.exe
+            *.bin
             SDL2.dll
             SKATEBOARD_CONSTRUCT.txt
