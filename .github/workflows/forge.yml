@@ -1,7 +1,7 @@
 name: SKATEBOARD_FORGE
 on:
   push:
-    branches: [ master ]
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 jobs:
@@ -22,7 +22,6 @@ jobs:
       - name: 🪟 Build Windows EXE
         run: |
           sudo apt-get update && sudo apt-get install -y mingw-w64
-          # Compile with explicit include paths
           x86_64-w64-mingw32-gcc -o empire_of_the_worlds.exe apps/lobby/src/main.c -Ipackages/common -Ipackages/simulation
       
       - name: 🔍 Debug File Existence
