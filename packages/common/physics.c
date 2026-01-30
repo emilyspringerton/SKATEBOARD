@@ -1,8 +1,8 @@
 #include "physics.h"
 
 void phys_apply_friction(Entity *e) {
-    e->vel.x *= FRICTION;
-    e->vel.z *= FRICTION;
+    e->vel.x *= SHANK_FRICTION;
+    e->vel.z *= SHANK_FRICTION;
 }
 
 void phys_accelerate(Entity *e, float wish_x, float wish_z, float target_speed, float accel_val) {

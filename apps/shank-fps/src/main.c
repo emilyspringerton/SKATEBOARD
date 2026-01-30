@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
         float r = -p.yaw * (M_PI/180.0f);
         float wish_x = (sinf(r) * fwd) + (cosf(r) * strafe);
         float wish_z = (-cosf(r) * fwd) + (sinf(r) * strafe);
-        phys_accelerate(&p, wish_x, wish_z, MAX_SPEED, ACCEL);
+        phys_accelerate(&p, wish_x, wish_z, SHANK_MAX_SPEED, SHANK_ACCEL);
         
         p.pos.x += p.vel.x; p.pos.z += p.vel.z;
 

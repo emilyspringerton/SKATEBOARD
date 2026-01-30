@@ -3,10 +3,10 @@
 
 #include <math.h>
 
-#define MAX_SPEED 0.42f
-#define ACCEL 0.05f
-#define FRICTION 0.92f
-#define GRAVITY 0.018f
+#define SHANK_MAX_SPEED 0.42f
+#define SHANK_ACCEL 0.05f
+#define SHANK_FRICTION 0.92f
+#define SHANK_GRAVITY 0.018f
 
 typedef struct { float x, y, z; } Vec3;
 typedef struct { Vec3 pos, vel; float yaw, pitch; } Entity;
