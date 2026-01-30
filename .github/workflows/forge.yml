@@ -16,39 +16,60 @@ jobs:
         with:
           python_version: '3.10'
       
-      - name: 📥 Fetch SDL2 (MinGW)
+      # --- PREPARATION ---
+      - name: 🛠️ Install Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 libsdl2-dev
+
+      - name: 📥 Fetch SDL2 (MinGW for Windows)
         run: |
           wget https://github.com/libsdl-org/SDL/releases/download/release-2.28.5/SDL2-devel-2.28.5-mingw.tar.gz
           tar xzf SDL2-devel-2.28.5-mingw.tar.gz
           mv SDL2-2.28.5/x86_64-w64-mingw32 sdl2_win
 
-      - name: 🔨 Forge C Code
+      - name: 🔨 Forge Source Code
         run: python scripts/phase_ignition.py
 
       - name: 📜 Forge The Construct (LLM Context)
         run: python scripts/construct_builder.py
       
-      - name: 🪟 Setup MinGW
-        run: sudo apt-get update && sudo apt-get install -y mingw-w64
-
-      - name: 🐟 Build Fishing Game
+      # --- WINDOWS BUILD (Cross-Compile) ---
+      - name: 🪟 Compile Windows
         run: |
+          # Empire Client
+          x86_64-w64-mingw32-gcc -o empire_of_the_worlds.exe apps/lobby/src/main.c \
+            -Ipackages/common -Ipackages/simulation \
+            -Isdl2_win/include/SDL2 -Dmain=SDL_main \
+            -Lsdl2_win/lib -lmingw32 -lSDL2main -lSDL2 -lm
+          
+          # Fishing Game
           x86_64-w64-mingw32-gcc -o fishing_game.exe apps/fishing/src/main.c \
             -Ipackages/common -Ipackages/simulation \
             -Isdl2_win/include/SDL2 -Dmain=SDL_main \
             -Lsdl2_win/lib -lmingw32 -lSDL2main -lSDL2 -lm
 
-      - name: 👑 Build Empire of the Worlds
-        run: |
-          x86_64-w64-mingw32-gcc -o empire_of_the_worlds.exe apps/lobby/src/main.c \
-            -Ipackages/common -Ipackages/simulation \
-            -Isdl2_win/include/SDL2 -Dmain=SDL_main \
-            -Lsdl2_win/lib -lmingw32 -lSDL2main -lSDL2 -lm
-
-      - name: 📦 Bundle DLL
+      - name: 📦 Bundle Windows DLL
         run: cp sdl2_win/bin/SDL2.dll .
 
-      - name: 📦 Upload Artifacts
+      # --- LINUX BUILD (Native) ---
+      - name: 🐧 Compile Linux
+        run: |
+          # Empire Client
+          gcc -o empire_of_the_worlds.bin apps/lobby/src/main.c \
+            -Ipackages/common -Ipackages/simulation \
+            $(sdl2-config --cflags --libs) -lm
+          
+          # Fishing Game
+          gcc -o fishing_game.bin apps/fishing/src/main.c \
+            -Ipackages/common -Ipackages/simulation \
+            $(sdl2-config --cflags --libs) -lm
+          
+          # Make them executable
+          chmod +x empire_of_the_worlds.bin fishing_game.bin
+
+      # --- UPLOAD ---
+      - name: 📦 Upload Unified Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: SKATEBOARD_ARTIFACTS
@@ -56,4 +77,6 @@ jobs:
             empire_of_the_worlds.exe
             fishing_game.exe
             SDL2.dll
+            empire_of_the_worlds.bin
+            fishing_game.bin
             SKATEBOARD_CONSTRUCT.txt
