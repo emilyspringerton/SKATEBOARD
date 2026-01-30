@@ -3,34 +3,42 @@
 
 void map_generate_canyon(GameMap *m) {
     m->count = 0;
-    
-    // 1. The Floor (High Friction)
+    // Floor
     m->walls[m->count++] = (MapWall){ {-100, -1, -100}, {100, 0, 100}, 0.92f, 0x111111 };
-    
-    // 2. Procedural Mesas (Golden Ratio Placement)
-    for(int i=0; i<20; i++) {
-        float angle = i * PHI * 2.0f * 3.14159f;
-        float dist = 10.0f + (i * 2.0f);
-        float x = cosf(angle) * dist;
-        float z = sinf(angle) * dist;
-        
-        m->walls[m->count++] = (MapWall){ 
-            {x-2, 0, z-2}, {x+2, (float)(5 + (i%5)), z+2}, 
-            0.98f, 0x444466 
-        };
+    // Pillars
+    for(int i=0; i<10; i++) {
+        float x = i * 8.0f - 40.0f;
+        m->walls[m->count++] = (MapWall){ {x, 0, -10}, {x+2, 10, -8}, 0.98f, 0x444466 };
     }
 }
 
 void map_resolve_collision(GameMap *m, Entity *e) {
     for(int i=0; i<m->count; i++) {
         MapWall *w = &m->walls[i];
-        // Simple AABB Check
+        // Check if player is inside AABB
         if(e->pos.x > w->min.x && e->pos.x < w->max.x &&
            e->pos.z > w->min.z && e->pos.z < w->max.z &&
            e->pos.y > w->min.y && e->pos.y < w->max.y) {
-               // Push out logic (simplified for parity)
-               e->pos.y = w->max.y;
-               e->vel.y = 0;
+               
+               // Calculate overlap on each axis
+               float dx1 = e->pos.x - w->min.x;
+               float dx2 = w->max.x - e->pos.x;
+               float dz1 = e->pos.z - w->min.z;
+               float dz2 = w->max.z - e->pos.z;
+
+               // Push out along the shortest path
+               float min_x = (dx1 < dx2) ? dx1 : dx2;
+               float min_z = (dz1 < dz2) ? dz1 : dz2;
+
+               if (min_x < min_z) {
+                   if (dx1 < dx2) e->pos.x = w->min.x - 0.01f;
+                   else e->pos.x = w->max.x + 0.01f;
+                   e->vel.x = 0;
+               } else {
+                   if (dz1 < dz2) e->pos.z = w->min.z - 0.01f;
+                   else e->pos.z = w->max.z + 0.01f;
+                   e->vel.z = 0;
+               }
            }
     }
 }

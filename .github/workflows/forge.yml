@@ -25,11 +25,13 @@ jobs:
         run: python scripts/construct_builder.py
       - name: 🪟 Compile Windows
         run: |
-          INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol -Ipackages/map -Isdl2_win/include/SDL2 -Dmain=SDL_main"
-          LIB="-Lsdl2_win/lib -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -lm -lws2_32"
+          INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol -Ipackages/map -Isdl2_win/include/SDL2"
+          # -mconsole ensures we don't need WinMain and we get a terminal
+          # -lSDL2main MUST come before -lSDL2
+          LIB="-Lsdl2_win/lib -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -lm -lws2_32 -mconsole"
           SRCS="apps/shank-fps/src/main.c packages/common/physics.c packages/map/map.c"
           x86_64-w64-mingw32-gcc -o shank_pit.exe $SRCS $INC $LIB
-          x86_64-w64-mingw32-gcc -o shank_server.exe apps/server/src/main.c $INC -lws2_32
+          x86_64-w64-mingw32-gcc -o shank_server.exe apps/server/src/main.c $INC -lws2_32 -mconsole
           cp sdl2_win/bin/SDL2.dll .
       - name: 🐧 Compile Linux
         run: |
@@ -41,7 +43,7 @@ jobs:
       - name: 📦 Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SKATEBOARD_SERVER_PARITY_BUILD
+          name: SKATEBOARD_PARITY_v1
           path: |
             *.exe
             *.bin
