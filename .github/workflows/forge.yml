@@ -25,21 +25,21 @@ jobs:
         run: python scripts/construct_builder.py
       - name: 🪟 Compile Windows
         run: |
-          W_INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol -Isdl2_win/include/SDL2 -Dmain=SDL_main"
-          W_LIB="-Lsdl2_win/lib -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -lm"
-          x86_64-w64-mingw32-gcc -o shank_pit.exe apps/shank-fps/src/main.c packages/common/physics.c $W_INC $W_LIB
-          x86_64-w64-mingw32-gcc -o empire_of_the_worlds.exe apps/lobby/src/main.c packages/common/physics.c $W_INC $W_LIB
+          INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol -Ipackages/map -Isdl2_win/include/SDL2 -Dmain=SDL_main"
+          LIB="-Lsdl2_win/lib -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -lm"
+          SRCS="apps/shank-fps/src/main.c packages/common/physics.c packages/map/map.c"
+          x86_64-w64-mingw32-gcc -o shank_pit.exe $SRCS $INC $LIB
           cp sdl2_win/bin/SDL2.dll .
       - name: 🐧 Compile Linux
         run: |
-          L_INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol"
-          L_LIB="$(sdl2-config --cflags --libs) -lGL -lGLU -lm"
-          gcc -o shank_pit.bin apps/shank-fps/src/main.c packages/common/physics.c $L_INC $L_LIB
-          gcc -o empire_of_the_worlds.bin apps/lobby/src/main.c packages/common/physics.c $L_INC $L_LIB
+          INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol -Ipackages/map"
+          LIB="$(sdl2-config --cflags --libs) -lGL -lGLU -lm"
+          SRCS="apps/shank-fps/src/main.c packages/common/physics.c packages/map/map.c"
+          gcc -o shank_pit.bin $SRCS $INC $LIB
       - name: 📦 Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SKATEBOARD_PROTOCOL_BUILD
+          name: SKATEBOARD_GEOMETRY_BUILD
           path: |
             *.exe
             *.bin

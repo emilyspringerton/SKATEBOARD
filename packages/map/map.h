@@ -1,25 +1,23 @@
 #ifndef MAP_H
 #define MAP_H
 
-#include "protocol.h" // Needs Vec3
+#include "physics.h"
+
+#define MAX_WALLS 1024
+#define PHI 1.61803398875f
 
 typedef struct {
-    int id;
-    float x, y, z;
-    float sx, sy, sz;
-    float r, g, b;
+    Vec3 min, max;
     float friction;
-} Wall;
+    uint32_t color;
+} MapWall;
 
 typedef struct {
-    Wall walls[1000]; // Increased limit for canyon
-    int wall_count;
+    MapWall walls[MAX_WALLS];
+    int count;
 } GameMap;
 
-void map_init(GameMap *map);
-int map_ray_cast(GameMap *map, Vec3 origin, Vec3 dir, float max_dist);
-
-// FIXED SIGNATURE: Returns float (friction), not void
-float map_resolve_collision(GameMap *map, Vec3 *pos, Vec3 *vel);
+void map_generate_canyon(GameMap *m);
+void map_resolve_collision(GameMap *m, Entity *e);
 
 #endif
