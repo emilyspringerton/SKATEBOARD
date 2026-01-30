@@ -19,31 +19,40 @@ jobs:
           wget https://github.com/libsdl-org/SDL/releases/download/release-2.28.5/SDL2-devel-2.28.5-mingw.tar.gz
           tar xzf SDL2-devel-2.28.5-mingw.tar.gz
           mv SDL2-2.28.5/x86_64-w64-mingw32 sdl2_win
+
       - name: 🔨 Forge Source Code
         run: python scripts/phase_ignition.py
+
       - name: 📜 Forge The Construct
         run: python scripts/construct_builder.py
-      - name: 🪟 Compile Windows
+
+      - name: 🪟 BUILD WINDOWS (.exe)
         run: |
           INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol -Ipackages/map -Isdl2_win/include/SDL2"
-          # -mconsole ensures we don't need WinMain and we get a terminal
-          # -lSDL2main MUST come before -lSDL2
           LIB="-Lsdl2_win/lib -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -lm -lws2_32 -mconsole"
-          SRCS="apps/shank-fps/src/main.c packages/common/physics.c packages/map/map.c"
-          x86_64-w64-mingw32-gcc -o shank_pit.exe $SRCS $INC $LIB
+          COMMON="packages/common/physics.c packages/map/map.c"
+          
+          x86_64-w64-mingw32-gcc -o shank_pit.exe apps/shank-fps/src/main.c $COMMON $INC $LIB
+          x86_64-w64-mingw32-gcc -o empire_lobby.exe apps/lobby/src/main.c $COMMON $INC $LIB
+          x86_64-w64-mingw32-gcc -o fishing_game.exe apps/fishing/src/main.c $INC $LIB
           x86_64-w64-mingw32-gcc -o shank_server.exe apps/server/src/main.c $INC -lws2_32 -mconsole
           cp sdl2_win/bin/SDL2.dll .
-      - name: 🐧 Compile Linux
+
+      - name: 🐧 BUILD LINUX (.bin)
         run: |
           INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol -Ipackages/map"
           LIB="$(sdl2-config --cflags --libs) -lGL -lGLU -lm"
-          SRCS="apps/shank-fps/src/main.c packages/common/physics.c packages/map/map.c"
-          gcc -o shank_pit.bin $SRCS $INC $LIB
+          COMMON="packages/common/physics.c packages/map/map.c"
+          
+          gcc -o shank_pit.bin apps/shank-fps/src/main.c $COMMON $INC $LIB
+          gcc -o empire_lobby.bin apps/lobby/src/main.c $COMMON $INC $LIB
+          gcc -o fishing_game.bin apps/fishing/src/main.c $INC $LIB
           gcc -o shank_server.bin apps/server/src/main.c $INC
-      - name: 📦 Upload Artifacts
+
+      - name: 📦 UPLOAD ALL ARTIFACTS
         uses: actions/upload-artifact@v4
         with:
-          name: SKATEBOARD_PARITY_v1
+          name: SKATEBOARD_FULL_RESTORE
           path: |
             *.exe
             *.bin
