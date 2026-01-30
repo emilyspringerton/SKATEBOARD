@@ -24,11 +24,22 @@ jobs:
 
       - name: 🔨 Forge C Code
         run: python scripts/phase_ignition.py
+
+      - name: 📜 Forge The Construct (LLM Context)
+        run: python scripts/construct_builder.py
       
-      - name: 🪟 Build Windows EXE
+      - name: 🪟 Setup MinGW
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+
+      - name: 🐟 Build Fishing Game
         run: |
-          sudo apt-get update && sudo apt-get install -y mingw-w64
-          # Compile linking against the downloaded SDL2
+          x86_64-w64-mingw32-gcc -o fishing_game.exe apps/fishing/src/main.c \
+            -Ipackages/common -Ipackages/simulation \
+            -Isdl2_win/include/SDL2 -Dmain=SDL_main \
+            -Lsdl2_win/lib -lmingw32 -lSDL2main -lSDL2 -lm
+
+      - name: 👑 Build Empire of the Worlds
+        run: |
           x86_64-w64-mingw32-gcc -o empire_of_the_worlds.exe apps/lobby/src/main.c \
             -Ipackages/common -Ipackages/simulation \
             -Isdl2_win/include/SDL2 -Dmain=SDL_main \
@@ -40,7 +51,9 @@ jobs:
       - name: 📦 Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SKATEBOARD_GRID_BUILD
+          name: SKATEBOARD_ARTIFACTS
           path: |
             empire_of_the_worlds.exe
+            fishing_game.exe
             SDL2.dll
+            SKATEBOARD_CONSTRUCT.txt
