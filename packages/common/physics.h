@@ -5,6 +5,73 @@
 #include <stdio.h>
 #include "protocol.h"
 
+#ifdef SHANKPIT_NO_LIBM
+static inline float shank_absf(float x) { return x < 0.0f ? -x : x; }
+static inline double shank_fabs(double x) { return x < 0.0 ? -x : x; }
+
+static inline float shank_wrap_pi(float x) {
+    const float two_pi = 6.28318530718f;
+    const float pi = 3.14159265359f;
+    while (x > pi) x -= two_pi;
+    while (x < -pi) x += two_pi;
+    return x;
+}
+
+static inline float shank_sinf(float x) {
+    x = shank_wrap_pi(x);
+    float x2 = x * x;
+    float term = x;
+    term -= (x * x2) / 6.0f;
+    term += (x * x2 * x2) / 120.0f;
+    term -= (x * x2 * x2 * x2) / 5040.0f;
+    return term;
+}
+
+static inline float shank_cosf(float x) {
+    x = shank_wrap_pi(x);
+    float x2 = x * x;
+    float term = 1.0f;
+    term -= x2 / 2.0f;
+    term += (x2 * x2) / 24.0f;
+    term -= (x2 * x2 * x2) / 720.0f;
+    return term;
+}
+
+static inline float shank_sqrtf(float x) {
+    if (x <= 0.0f) return 0.0f;
+    float guess = x * 0.5f;
+    for (int i = 0; i < 6; i++) {
+        guess = 0.5f * (guess + x / guess);
+    }
+    return guess;
+}
+
+static inline float shank_atanf(float z) {
+    float abs_z = shank_absf(z);
+    float result = abs_z / (1.0f + 0.28f * abs_z * abs_z);
+    return z < 0.0f ? -result : result;
+}
+
+static inline float shank_atan2f(float y, float x) {
+    const float pi = 3.14159265359f;
+    if (x == 0.0f) {
+        if (y > 0.0f) return pi / 2.0f;
+        if (y < 0.0f) return -pi / 2.0f;
+        return 0.0f;
+    }
+    float atan = shank_atanf(y / x);
+    if (x > 0.0f) return atan;
+    if (y >= 0.0f) return atan + pi;
+    return atan - pi;
+}
+
+#define sinf shank_sinf
+#define cosf shank_cosf
+#define sqrtf shank_sqrtf
+#define atan2f shank_atan2f
+#define fabs shank_fabs
+#endif
+
 // --- TUNING ---
 #define GRAVITY_FLOAT 0.025f 
 #define GRAVITY_DROP 0.075f  

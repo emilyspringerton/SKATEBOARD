@@ -1,3 +1,4 @@
+#define SHANKPIT_NO_LIBM 1
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
