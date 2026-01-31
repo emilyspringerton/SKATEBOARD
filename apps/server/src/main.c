@@ -8,6 +8,7 @@
     #include <winsock2.h>
     #include <ws2tcpip.h>
     #pragma comment(lib, "ws2_32.lib")
+    #include <windows.h>
 #else
     #include <sys/socket.h>
     #include <netinet/in.h>
@@ -25,9 +26,13 @@ struct sockaddr_in bind_addr;
 unsigned int client_last_seq[MAX_CLIENTS]; 
 
 unsigned int get_server_time() {
+#ifdef _WIN32
+    return (unsigned int)GetTickCount64();
+#else
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (unsigned int)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+#endif
 }
 
 void server_net_init() {
