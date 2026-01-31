@@ -1,8 +1,8 @@
-#ifndef PROTOCOL_H
-#define PROTOCOL_H
+#ifndef LEGACY_PROTOCOL_H
+#define LEGACY_PROTOCOL_H
 
 #include <stdint.h>
-#include "physics.h"
+#include "../common/physics.h"
 
 #define PROTOCOL_VERSION 485
 #define MAX_CLIENTS 32
