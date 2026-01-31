@@ -1,5 +1,5 @@
-#ifndef PROTOCOL_H
-#define PROTOCOL_H
+#ifndef LEGACY_PROTOCOL_H
+#define LEGACY_PROTOCOL_H
 
 #include <stdint.h>
 
