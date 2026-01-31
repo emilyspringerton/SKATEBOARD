@@ -1,82 +1,187 @@
-#include <SDL.h>
-#include <SDL_opengl.h>
+#define SDL_MAIN_HANDLED
+#include <stdio.h>
+#include "shank.h"
+#include "input.h"
+#include "net.h"
+#include "font.h"
+#include "particles.h"
 #include <GL/glu.h>
-#include <math.h>
-#include "physics.h"
+#include "../../../packages/map/map.h"
+#include "input.c"
+#include "net.c"
+#include "../../../packages/map/map.c"
 
-#define SCREEN_W 1280
-#define SCREEN_H 720
+GameContext game;
+GameMap level;
+int show_scoreboard = 0;
+int show_help = 0;
+char kill_feed[5][64];
+int kill_timer = 0;
 
-void draw_grid() {
-    glBegin(GL_LINES);
-    glColor3f(0.0f, 0.4f, 0.0f);
-    for(int i=-50; i<=50; i++) {
-        glVertex3f((float)i, 0, -50); glVertex3f((float)i, 0, 50);
-        glVertex3f(-50, 0, (float)i); glVertex3f(50, 0, (float)i);
-    }
-    glEnd();
+void add_kill_msg(const char* msg) {
+    for(int i=0; i<4; i++) strcpy(kill_feed[i], kill_feed[i+1]);
+    strcpy(kill_feed[4], msg); kill_timer = 300;
 }
 
-void draw_monolith(float x, float z, float h) {
-    glPushMatrix();
-    glTranslatef(x, h/2.0f, z);
-    glScalef(1.0f, h, 1.0f);
-    glBegin(GL_QUADS);
-    // Simple Cube face colors for depth
-    glColor3f(0.1f, 0.1f, 0.2f); glVertex3f(-1,-1, 1); glVertex3f( 1,-1, 1); glVertex3f( 1, 1, 1); glVertex3f(-1, 1, 1);
-    glColor3f(0.05f, 0.05f, 0.1f); glVertex3f(-1,-1,-1); glVertex3f(-1, 1,-1); glVertex3f( 1, 1,-1); glVertex3f( 1,-1,-1);
+void init_opengl() {
+    glEnable(GL_DEPTH_TEST);
+    glMatrixMode(GL_PROJECTION); glLoadIdentity();
+    gluPerspective(FOV, (float)WINDOW_WIDTH / WINDOW_HEIGHT, 0.1f, 1000.0f);
+    glMatrixMode(GL_MODELVIEW); glPointSize(4.0f);
+}
+
+void render_hud() {
+    glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
+    gluOrtho2D(0, WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();
+    glDisable(GL_DEPTH_TEST);
+
+    Player *p = &game.local_player;
+    char buf[64];
+    
+    // HP/Ammo
+    sprintf(buf, "HP %d", p->health);
+    draw_text(buf, 50, WINDOW_HEIGHT - 80, 40.0f, 1, p->health < 30 ? 0 : 1, 0.2);
+    sprintf(buf, "AMMO %d", p->ammo[p->current_weapon]);
+    draw_text(buf, WINDOW_WIDTH - 300, WINDOW_HEIGHT - 80, 40.0f, 1, 1, 0);
+
+    // Timer
+    int seconds = (game.last_server_state.match_timer / 60) % 60;
+    int minutes = (game.last_server_state.match_timer / 60) / 60;
+    sprintf(buf, "%02d:%02d", minutes, seconds);
+    draw_text(buf, WINDOW_WIDTH/2 - 80, 50, 40.0f, 1, 1, 1);
+
+    // Help Hint
+    draw_text("[H] HELP", 20, 20, 15.0f, 0.5, 0.5, 0.5);
+
+    // Toggle Help Overlay
+    if (show_help) {
+        glColor4f(0,0,0,0.8f);
+        glBegin(GL_QUADS); glVertex2f(200, 150); glVertex2f(WINDOW_WIDTH-200, 150); glVertex2f(WINDOW_WIDTH-200, 450); glVertex2f(200, 450); glEnd();
+        draw_text("COMMANDS", WINDOW_WIDTH/2 - 100, 180, 30.0f, 1, 1, 0);
+        draw_text("WASD : MOVE", 250, 240, 20.0f, 1,1,1);
+        draw_text("MOUSE : AIM / SHOOT", 250, 270, 20.0f, 1,1,1);
+        draw_text("1 - 5 : WEAPONS", 250, 300, 20.0f, 1,1,1);
+        draw_text("G : GRENADE", 250, 330, 20.0f, 1,1,1);
+        draw_text("E : ENTER VEHICLE", 250, 360, 20.0f, 1,1,1);
+        draw_text("TAB : SCOREBOARD", 250, 390, 20.0f, 1,1,1);
+    }
+
+    if (kill_timer > 0) {
+        kill_timer--;
+        for(int i=0; i<5; i++) { if(strlen(kill_feed[i]) > 0) draw_text(kill_feed[i], WINDOW_WIDTH - 400, 100 + (i*40), 20.0f, 1, 0.5, 0); }
+    }
+
+    glBegin(GL_LINES); glColor3f(0,1,1);
+    glVertex2f(WINDOW_WIDTH/2 - 15, WINDOW_HEIGHT/2); glVertex2f(WINDOW_WIDTH/2 + 15, WINDOW_HEIGHT/2);
+    glVertex2f(WINDOW_WIDTH/2, WINDOW_HEIGHT/2 - 15); glVertex2f(WINDOW_WIDTH/2, WINDOW_HEIGHT/2 + 15);
     glEnd();
-    glPopMatrix();
+
+    if (show_scoreboard) {
+        glColor4f(0,0,0,0.8f);
+        glBegin(GL_QUADS); glVertex2f(200, 100); glVertex2f(WINDOW_WIDTH-200, 100); glVertex2f(WINDOW_WIDTH-200, WINDOW_HEIGHT-100); glVertex2f(200, WINDOW_HEIGHT-100); glEnd();
+        draw_text("SCOREBOARD", WINDOW_WIDTH/2 - 150, 120, 30.0f, 1,1,1);
+        for(int i=0; i<MAX_CLIENTS; i++) {
+            PlayerState *s = &game.last_server_state.players[i];
+            if(s->active) {
+                sprintf(buf, "PLAYER %d   K: %d   D: %d", i, s->kills, s->deaths);
+                draw_text(buf, 250, 200 + (i*50), 25.0f, 0.8, 0.8, 0.8);
+            }
+        }
+    }
+
+    glEnable(GL_DEPTH_TEST);
+    glMatrixMode(GL_PROJECTION); glPopMatrix();
+    glMatrixMode(GL_MODELVIEW); glPopMatrix();
+}
+
+void render() {
+    glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glLoadIdentity();
+    glRotatef(-game.local_player.pitch, 1.0f, 0.0f, 0.0f);
+    glRotatef(-game.local_player.yaw, 0.0f, 1.0f, 0.0f);
+    glTranslatef(-game.local_player.pos.x, -game.local_player.pos.y - 1.7f, -game.local_player.pos.z);
+
+    for(int i=0; i<level.wall_count; i++) {
+        Wall *w = &level.walls[i]; glPushMatrix(); glTranslatef(w->x, w->y, w->z); glScalef(w->sx, w->sy, w->sz);
+        glColor3f(w->r, w->g, w->b);
+        glBegin(GL_QUADS);
+            glVertex3f(-1,-1,1); glVertex3f(1,-1,1); glVertex3f(1,1,1); glVertex3f(-1,1,1);
+            glVertex3f(-1,-1,-1); glVertex3f(-1,1,-1); glVertex3f(1,1,-1); glVertex3f(1,-1,-1);
+            glVertex3f(-1,-1,-1); glVertex3f(-1,-1,1); glVertex3f(-1,1,1); glVertex3f(-1,1,-1);
+            glVertex3f(1,-1,-1); glVertex3f(1,1,-1); glVertex3f(1,1,1); glVertex3f(1,-1,1);
+            glVertex3f(-1,1,-1); glVertex3f(-1,1,1); glVertex3f(1,1,1); glVertex3f(1,1,-1);
+            glVertex3f(-1,-1,-1); glVertex3f(1,-1,-1); glVertex3f(1,-1,1); glVertex3f(-1,-1,1);
+        glEnd(); glPopMatrix();
+    }
+    
+    glBegin(GL_LINES); glColor3f(0.3f, 0.3f, 0.3f); for(int i=-50; i<=50; i+=2) { glVertex3f(i,0,-50); glVertex3f(i,0,50); glVertex3f(-50,0,i); glVertex3f(50,0,i); } glEnd();
+    update_render_particles(0.016f);
+
+    for(int i=0; i<MAX_CLIENTS; i++) {
+        PlayerState *p = &game.last_server_state.players[i];
+        if (!p->active || i == 0 || p->vehicle_id != -1) continue; 
+        if (p->hit_feedback == 1) spawn_particle(p->pos, 0, 0, 1);
+        if (p->hit_feedback == 2) spawn_particle(p->pos, 1, 0, 0);
+        if (p->health <= 0) glColor3f(0.2, 0, 0);
+        else glColor3f(1,0,0);
+        glPushMatrix();
+        glTranslatef(p->pos.x, p->pos.y, p->pos.z);
+        glScalef(0.7f,1.7f,0.7f);
+        glBegin(GL_QUADS);
+            glVertex3f(-0.5,-0.5,0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(-0.5,0.5,0.5);
+            glVertex3f(-0.5,-0.5,-0.5); glVertex3f(-0.5,0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,-0.5,-0.5);
+            glVertex3f(-0.5,-0.5,-0.5); glVertex3f(-0.5,-0.5,0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(-0.5,0.5,-0.5);
+            glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,0.5,-0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,-0.5,0.5);
+            glVertex3f(-0.5,0.5,-0.5); glVertex3f(-0.5,0.5,0.5); glVertex3f(0.5,0.5,0.5); glVertex3f(0.5,0.5,-0.5);
+            glVertex3f(-0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,-0.5); glVertex3f(0.5,-0.5,0.5); glVertex3f(-0.5,-0.5,0.5);
+        glEnd();
+        glPopMatrix();
+    }
+
+    render_hud();
 }
 
 int main(int argc, char* argv[]) {
+    game.running = true;
+    game.local_player.current_weapon = 1;
+    game.local_player.health = 100;
+    for(int i=0; i<MAX_WEAPONS; i++) game.local_player.ammo[i] = WPN_STATS[i].ammo_max;
+
     SDL_Init(SDL_INIT_VIDEO);
-    SDL_Window* win = SDL_CreateWindow("SHANKPIT // PARITY_v1", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, SCREEN_W, SCREEN_H, SDL_WINDOW_OPENGL);
-    SDL_GL_CreateContext(win);
-    
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    gluPerspective(70.0, (double)SCREEN_W/SCREEN_H, 0.1, 1000.0);
-    glMatrixMode(GL_MODELVIEW);
+    game.window = SDL_CreateWindow("SHANKPIT // CTF", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL);
+    game.gl_context = SDL_GL_CreateContext(game.window);
 
-    Entity p = { {0, 2, 5}, {0, 0, 0}, 0, 0 };
-    int running = 1;
-    const Uint8* keys = SDL_GetKeyboardState(NULL);
+    init_opengl();
+    init_particles();
+    map_generate_canyon(&level);
 
-    while (running) {
+    input_init(&game);
+    net_init(&game, "127.0.0.1");
+
+    Uint32 last_tick = SDL_GetTicks();
+    while(game.running) {
+        Uint32 now = SDL_GetTicks();
+        float dt = (now - last_tick) / 1000.0f; last_tick = now;
+
+        input_update(&game, dt);
+        net_send_input(&game);
+        net_receive_state(&game);
+
         SDL_Event e;
-        while (SDL_PollEvent(&e)) { if (e.type == SDL_QUIT) running = 0; }
+        while(SDL_PollEvent(&e)) {
+            if(e.type == SDL_QUIT) game.running = false;
+            if(e.type == SDL_KEYDOWN) {
+                if(e.key.keysym.sym == SDLK_TAB) show_scoreboard = !show_scoreboard;
+                if(e.key.keysym.sym == SDLK_h) show_help = !show_help;
+            }
+        }
 
-        // Input Mapping (Classic Shank Controls)
-        float fwd = 0, strafe = 0;
-        if (keys[SDL_SCANCODE_W]) fwd += 1.0f;
-        if (keys[SDL_SCANCODE_S]) fwd -= 1.0f;
-        if (keys[SDL_SCANCODE_A]) strafe -= 1.0f;
-        if (keys[SDL_SCANCODE_D]) strafe += 1.0f;
-
-        // Apply Physics (The Slippery Logic from Phase 013)
-        phys_apply_friction(&p);
-        float r = -p.yaw * (M_PI/180.0f);
-        float wish_x = (sinf(r) * fwd) + (cosf(r) * strafe);
-        float wish_z = (-cosf(r) * fwd) + (sinf(r) * strafe);
-        phys_accelerate(&p, wish_x, wish_z, SHANK_MAX_SPEED, SHANK_ACCEL);
-        
-        p.pos.x += p.vel.x; p.pos.z += p.vel.z;
-
-        // Render Frame
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glLoadIdentity();
-        glRotatef(p.pitch, 1, 0, 0);
-        glRotatef(p.yaw, 0, 1, 0);
-        glTranslatef(-p.pos.x, -p.pos.y, -p.pos.z);
-
-        draw_grid();
-        draw_monolith(5, -10, 8);
-        draw_monolith(-8, -15, 12);
-
-        SDL_GL_SwapWindow(win);
-        SDL_Delay(16);
+        render();
+        SDL_GL_SwapWindow(game.window);
     }
+
     SDL_Quit();
     return 0;
 }

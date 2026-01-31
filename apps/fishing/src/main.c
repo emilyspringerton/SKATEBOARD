@@ -1,3 +1,8 @@
-// Fishing Minigame Source
 #include <stdio.h>
-int main() { printf("FISHING MINIGAME ONLINE\n"); return 0; }
+
+int fishing_run(int argc, char* argv[]);
+
+int main(int argc, char* argv[]) {
+    printf("Launching Fishing Minigame...\n");
+    return fishing_run(argc, argv);
+}

@@ -1,9 +1,8 @@
 #include <stdio.h>
 #include <SDL2/SDL.h>
 #include <math.h>
-#include "font.h" // Shared ShankEngine Font
 
-int main(int argc, char* argv[]) {
+int fishing_run(int argc, char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
     SDL_Window *win = SDL_CreateWindow("SKATECHAIN // FISHING v1.1", 100, 100, 800, 600, 0);
     SDL_Renderer *rend = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED);
