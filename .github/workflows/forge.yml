@@ -1,8 +1,9 @@
 name: SKATEBOARD_FORGE
+
 on:
   push:
-    branches: [ "main", "master" ]
-  workflow_dispatch:
+    branches: ["main", "master"]
+  workflow_dispatch: {}
 
 jobs:
   build_artifacts:
@@ -10,40 +11,58 @@ jobs:
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
+
       - name: 🐍 Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: 🛠️ Install Build Tools
-        run: sudo apt-get update && sudo apt-get install -y mingw-w64 libsdl2-dev libgl1-mesa-dev libglu1-mesa-dev
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y mingw-w64 libsdl2-dev libgl1-mesa-dev libglu1-mesa-dev wget tar
+
       - name: 📥 Fetch SDL2 (MinGW)
         run: |
-          wget https://github.com/libsdl-org/SDL/releases/download/release-2.28.5/SDL2-devel-2.28.5-mingw.tar.gz
+          set -euxo pipefail
+          wget -q https://github.com/libsdl-org/SDL/releases/download/release-2.28.5/SDL2-devel-2.28.5-mingw.tar.gz
           tar xzf SDL2-devel-2.28.5-mingw.tar.gz
           mv SDL2-2.28.5/x86_64-w64-mingw32 sdl2_win
 
       - name: 🔨 Forge Source Code
-        run: python scripts/phase_ignition.py
+        run: |
+          set -euxo pipefail
+          python scripts/phase_ignition.py
 
       - name: 📜 Forge The Construct
-        run: python scripts/construct_builder.py
+        run: |
+          set -euxo pipefail
+          python scripts/construct_builder.py
+          ls -la
+          test -f SKATEBOARD_CONSTRUCT.txt
 
       - name: 🪟 BUILD WINDOWS (.exe)
         run: |
+          set -euxo pipefail
           INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol -Ipackages/map -Isdl2_win/include/SDL2"
           LIB="-Lsdl2_win/lib -lmingw32 -lSDL2main -lSDL2 -lopengl32 -lglu32 -lm -lws2_32 -mconsole"
           COMMON="packages/common/physics.c packages/map/map.c"
-          
+
           x86_64-w64-mingw32-gcc -o shank_pit.exe apps/shank-fps/src/main.c $COMMON $INC $LIB
           x86_64-w64-mingw32-gcc -o empire_lobby.exe apps/lobby/src/main.c $COMMON $INC $LIB
           x86_64-w64-mingw32-gcc -o fishing_game.exe apps/fishing/src/main.c $INC $LIB
           x86_64-w64-mingw32-gcc -o shank_server.exe apps/server/src/main.c $INC -lws2_32 -mconsole
+
           cp sdl2_win/bin/SDL2.dll .
 
       - name: 🐧 BUILD LINUX (.bin)
         run: |
+          set -euxo pipefail
           INC="-Ipackages/common -Ipackages/simulation -Ipackages/protocol -Ipackages/map"
           LIB="$(sdl2-config --cflags --libs) -lGL -lGLU -lm"
           COMMON="packages/common/physics.c packages/map/map.c"
-          
+
           gcc -o shank_pit.bin apps/shank-fps/src/main.c $COMMON $INC $LIB
           gcc -o empire_lobby.bin apps/lobby/src/main.c $COMMON $INC $LIB
           gcc -o fishing_game.bin apps/fishing/src/main.c $INC $LIB
@@ -53,6 +72,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: SKATEBOARD_FULL_RESTORE
+          if-no-files-found: error
           path: |
             *.exe
             *.bin
