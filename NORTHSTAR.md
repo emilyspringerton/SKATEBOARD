@@ -1,8 +1,17 @@
-# NORTHSTAR — [Working Title TBD]: GTA3 × Skate 2, Non-Voxel Destructible Worlds, TrapX Universe
+# NORTHSTAR — Papercraft: GTA3 × Skate 2, Non-Voxel Destructible Worlds, TrapX Universe
 
 **Status:** Pure northstar. Nothing built yet — docs before software, same discipline as every
 other product in this ecosystem. This document exists to capture founder direction accurately
 before any implementation starts.
+
+**Named 2026-08-28**: founder real-time, closing the "[Working Title TBD]" this doc carried
+since 2026-07-24 — *"papercraft... thats the name of the thing we are building on SKATE skate
+culture northstar"* / *"instead of minecraft we iterate shankpit into papercraft"* / *"not
+voxels"*. Confirms, by name, the technical direction Section 1/4 below already scoped: this is
+built by iterating **SHANKPIT's own lineage** (this repo's `apps/shank-fps`, "the direct ancestor
+of SHANKPIT itself," per Section 4's own repo audit) forward, **not** GoblinFoxDragon/
+DragonsNShit's Minecraft-style voxel engine — the "non-voxel destructible worlds, R6 Siege-style"
+pillar was always the right read, now settled explicitly rather than left implicit.
 
 ---
 
@@ -90,3 +99,16 @@ default, but not decided). No destruction-mesh implementation, no city geography
 scheme, no vehicle list, no mission structure, no faction/crew system. This document is the
 direction, not the plan — the actual build plan is a separate pass once the founder confirms this
 is the right shape to build toward.
+
+## 6. Real relationship to WEAKNIGHT_BEDROCK_RACERS (2026-08-28)
+
+Founder real-time, same session this doc got its name: *"bedrock racers can evolve into
+papercraft."* `WEAKNIGHT_BEDROCK_RACERS` (its own 2026-08-28 racer-first pivot, see that repo's
+own `docs/NORTHSTAR.md` PIVOT section) is independently building exactly the kind of
+foundation Papercraft eventually needs: a real city-scale map, real vehicle traversal, PARENA
+embedded in the gameplay core from day one — not a coincidence, a real, named evolution path.
+Not a merge or a rename right now, and not a hard dependency either direction — BEDROCK_RACERS
+keeps shipping as its own real racer-first product on its own timeline; this is the founder
+flagging where that work could lead, so neither repo's own future direction gets scoped as if
+the other didn't exist. Revisit this relationship for real once BEDROCK_RACERS' own Phase A city
+work is further along and Papercraft itself starts picking an engine (Section 5 above).
